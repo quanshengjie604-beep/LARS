@@ -188,7 +188,7 @@ class GitHubCollector(Collector):
 
 class PeoplePageCollector(Collector):
     name = "labs"
-    NAME = re.compile(r"^[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'.-]+(?:\s+[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'.-]+){1,4}$")
+    NAME = re.compile(r"^[^\W\d_][\w'.-]+(?:\s+[^\W\d_][\w'.-]+){1,4}$", re.UNICODE)
 
     def collect(self, limit: int) -> Iterable[CollectedCandidate]:
         produced = 0
@@ -283,4 +283,13 @@ class HackathonCollector(PeoplePageCollector):
                         return
 
 
-COLLECTORS = {"arxiv": ArxivCollector, "github": GitHubCollector, "labs": PeoplePageCollector, "hackathons": HackathonCollector}
+from .company_collectors import YCombinatorCollector
+
+
+COLLECTORS = {
+    "yc": YCombinatorCollector,
+    "arxiv": ArxivCollector,
+    "github": GitHubCollector,
+    "labs": PeoplePageCollector,
+    "hackathons": HackathonCollector,
+}

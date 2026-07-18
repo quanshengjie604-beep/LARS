@@ -36,9 +36,14 @@ class PoliteHttpClient:
         root = f"{parsed.scheme}://{parsed.netloc}"
         if root not in self._robots:
             parser = urllib.robotparser.RobotFileParser()
-            parser.set_url(urljoin(root, "/robots.txt"))
+            robots_url = urljoin(root, "/robots.txt")
+            parser.set_url(robots_url)
             try:
-                parser.read()
+                self._wait(robots_url)
+                response = self.session.get(robots_url, timeout=self.timeout_seconds)
+                self._last_request[parsed.netloc] = time.monotonic()
+                response.raise_for_status()
+                parser.parse(response.text.splitlines())
             except Exception as exc:
                 LOGGER.warning("robots.txt unavailable for %s: %s; skipping for safety", root, exc)
                 return False
@@ -60,6 +65,19 @@ class PoliteHttpClient:
                     delay = max(0, (parsedate_to_datetime(retry).timestamp() - time.time()))
                 LOGGER.warning("Rate limited by %s; retry-after=%ss", response.url, delay)
             raise requests.HTTPError(f"rate limited: {response.status_code} {response.url}", response=response)
+        response.raise_for_status()
+        return response
+
+    def post(self, url: str, *, json=None, data=None, headers=None, minimum_delay=None) -> requests.Response:
+        self._wait(url, minimum_delay)
+        response = self.session.post(
+            url, json=json, data=data, headers=headers, timeout=self.timeout_seconds
+        )
+        self._last_request[urlparse(response.url).netloc] = time.monotonic()
+        if response.status_code in (403, 429):
+            raise requests.HTTPError(
+                f"rate limited: {response.status_code} {response.url}", response=response
+            )
         response.raise_for_status()
         return response
 

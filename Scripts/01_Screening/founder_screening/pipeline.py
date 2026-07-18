@@ -72,7 +72,7 @@ class CandidateStore:
 
     @staticmethod
     def _merge(target: Candidate, source: Candidate):
-        for attr in ("aliases", "affiliations", "profile_urls", "discovery_sources", "entrepreneurial_signals", "source_ids"):
+        for attr in ("aliases", "affiliations", "founded_companies", "profile_urls", "discovery_sources", "entrepreneurial_signals", "source_ids"):
             setattr(target, attr, _unique(getattr(target, attr) + getattr(source, attr)))
         for attr in ("headline", "current_role", "location", "geography"):
             left, right = getattr(target, attr), getattr(source, attr)
@@ -109,6 +109,21 @@ def validate_candidate(candidate: Candidate) -> list[str]:
             errors.append(f"null field absent from missing_fields: {path}")
     if not candidate.source_ids:
         errors.append("at least one source_id is required")
+    if not candidate.founded_companies:
+        errors.append("at least one publicly verified founded company is required")
+    if not candidate.company_name or not candidate.company_url:
+        errors.append("company_name and company_url are required")
+    if not candidate.founder_role or "founder" not in candidate.founder_role.lower():
+        errors.append("founder_role must explicitly contain Founder or Co-founder")
+    if not candidate.founder_relationship_evidence_url:
+        errors.append("founder_relationship_evidence_url is required")
+    for index, company in enumerate(candidate.founded_companies):
+        required = ("company_name", "company_url", "founder_role", "relationship_evidence_url")
+        missing = [field for field in required if not company.get(field)]
+        if missing:
+            errors.append(f"founded_companies[{index}] missing required fields: {missing}")
+        if company.get("founder_role") and "founder" not in company["founder_role"].lower():
+            errors.append(f"founded_companies[{index}].founder_role is not a founder role")
     return errors
 
 

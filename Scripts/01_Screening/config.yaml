@@ -1,11 +1,47 @@
 http:
-  user_agent: "LARS-Founder-Screening/0.1 (https://github.com/quanshengjie604-beep/LARS; research prototype)"
+  user_agent: "LARS-Founder-Screening/0.2 (https://github.com/quanshengjie604-beep/LARS; research prototype)"
   timeout_seconds: 30
   default_delay_seconds: 1.0
 
 sources:
-  labs:
+  yc:
     enabled: true
+    quota: 2000
+    overfetch_factor: 3
+    recent_months: 24
+    backfill_older: true
+    search_delay_seconds: 0.25
+    page_delay_seconds: 0.4
+    progress_interval: 100
+    domain_keywords:
+      - artificial intelligence
+      - machine learning
+      - generative ai
+      - ai assistant
+      - deep learning
+      - computer vision
+      - natural language processing
+      - developer tools
+      - devops
+      - open source
+      - infrastructure
+      - data engineering
+      - databases
+      - cloud computing
+      - robotics
+      - robotic
+      - autonomous
+      - biotech
+      - biological
+      - bioinformatics
+      - drug discovery
+      - therapeutics
+      - genomics
+      - synthetic biology
+      - healthcare
+      - health tech
+  labs:
+    enabled: false
     quota: 250
     pages:
       - institution: MIT CSAIL
@@ -28,7 +64,7 @@ sources:
         person_selector: ".person a, .people a, article a"
 
   hackathons:
-    enabled: true
+    enabled: false
     quota: 150
     pages:
       - event_name: Public AI Hackathon Projects
@@ -45,7 +81,7 @@ sources:
         member_selector: ".user-profile-link, .software-team-member a, .team-member a, [rel='author']"
 
   github:
-    enabled: true
+    enabled: false
     quota: 700
     token_env: GITHUB_TOKEN
     require_token: true
@@ -59,7 +95,7 @@ sources:
       - "topic:bioinformatics stars:>50 pushed:>2025-01-01"
 
   arxiv:
-    enabled: true
+    enabled: false
     # Runs last and may fill any unused capacity up to the global 2,000-person cap.
     quota: 2000
     months: 24

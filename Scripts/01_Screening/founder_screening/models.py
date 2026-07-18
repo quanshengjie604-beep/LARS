@@ -71,6 +71,11 @@ class Candidate:
     affiliations: list[str] = field(default_factory=list)
     location: str | None = None
     geography: str | None = None
+    company_name: str | None = None
+    company_url: str | None = None
+    founder_role: str | None = None
+    founder_relationship_evidence_url: str | None = None
+    founded_companies: list[dict[str, Any]] = field(default_factory=list)
     profile_urls: list[str] = field(default_factory=list)
     discovery_sources: list[str] = field(default_factory=list)
     entrepreneurial_signals: list[dict[str, Any]] = field(default_factory=list)

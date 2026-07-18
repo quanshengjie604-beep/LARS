@@ -1,12 +1,12 @@
 # Founder Screening Crawler
 
-One-shot CLI for collecting up to 2,000 potential-founder records from public research, open-source, research-lab, and hackathon evidence. It creates sourcing data only; it does not create `inference_requests.jsonl` and does not calculate Founder Score, screening axes, soft skills, network centrality, or any other model-derived score.
+One-shot CLI for collecting up to 2,000 people who are explicitly identified as a company Founder or Co-founder on a public company or accelerator page. It creates sourcing data only; it does not create `inference_requests.jsonl` and does not calculate Founder Score, screening axes, soft skills, network centrality, or any other model-derived score.
 
 ## Outputs
 
 The output directory contains:
 
-- `sourcing_candidates.jsonl`: one deduplicated person per line.
+- `sourcing_candidates.jsonl`: one deduplicated person per line. Every record contains `company_name`, `company_url`, `founder_role`, `founder_relationship_evidence_url`, and a `founded_companies` list.
 - `evidence_registry.jsonl`: one evidence item per line, joined by `candidate_id` and `source_id`.
 - `crawl_runs.jsonl`: run metadata, source counts, and non-fatal source errors.
 
@@ -16,10 +16,10 @@ All founder feature keys named in `Data_requirements.md` are present. Values tha
 
 ```powershell
 python -m pip install -r Scripts/01_Screening/requirements.txt
-$env:GITHUB_TOKEN = "your-public-read-token"
+# GITHUB_TOKEN is optional and is not needed for the verified-founder run.
 ```
 
-Use a fine-grained token with public metadata read access only. Do not commit it or place it in the YAML file. Authenticated GitHub requests have substantially higher limits than anonymous requests, which is necessary for a 2,000-person run.
+GitHub, arXiv, research-lab, and hackathon collectors remain available for future evidence enrichment, but they are disabled as primary sources because those pages alone do not prove that a person founded a company.
 
 The configured user agent identifies this repository. arXiv requests attribution for use of its public interoperability API.
 
@@ -42,13 +42,16 @@ python Scripts/01_Screening/crawl_founders.py `
 Run selected sources:
 
 ```powershell
-python Scripts/01_Screening/crawl_founders.py --sources arxiv,github --max-candidates 2000
+python Scripts/01_Screening/crawl_founders.py --sources yc --max-candidates 2000
 ```
 
 ## Collection policy
 
-- Uses the official arXiv Atom API and GitHub REST API.
-- Requests only public GitHub metadata; GitHub enrichment is skipped without a token by default.
+- Uses public YC company directory and company-detail pages as the primary strong-evidence source.
+- Rejects every person without an explicit Founder/Co-founder role, company name, company link, and relationship-evidence link.
+- Prioritizes companies launched in the last 24 months in AI/ML, systems, robotics, developer tools, healthcare, and bio/AI; older companies in the same domains are allowed only to backfill the 2,000-person target.
+- Retains inactive, acquired, and public companies as requested.
+- Uses the official arXiv Atom API and GitHub REST API only when those optional collectors are explicitly enabled.
 - Checks `robots.txt` before reading laboratory or hackathon pages.
 - Skips a web source when robots policy is unavailable or disallows access.
 - Does not log in, bypass anti-bot controls, scrape LinkedIn, or collect private contact details.

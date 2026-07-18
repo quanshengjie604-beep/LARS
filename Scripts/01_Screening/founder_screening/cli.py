@@ -11,11 +11,11 @@ from .pipeline import run
 
 
 def parser() -> argparse.ArgumentParser:
-    result = argparse.ArgumentParser(description="Collect public evidence for potential founders")
+    result = argparse.ArgumentParser(description="Collect public evidence for verified company founders")
     result.add_argument("--config", type=Path, default=Path(__file__).parents[1] / "config.yaml")
     result.add_argument("--output-dir", type=Path, default=Path("screening_handover/founder_sourcing"))
     result.add_argument("--max-candidates", type=int, default=2000)
-    result.add_argument("--sources", help="Comma-separated subset: arxiv,github,labs,hackathons")
+    result.add_argument("--sources", help="Comma-separated subset: yc,arxiv,github,labs,hackathons")
     result.add_argument("--dry-run", action="store_true", help="Validate and print the crawl plan without network requests")
     result.add_argument("--verbose", action="store_true")
     return result
