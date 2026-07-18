@@ -117,3 +117,24 @@ def test_stalled_and_failed_yield_total_loss():
         mask = p["status"] == st
         if mask.any():
             assert np.all(p["moic"][mask] == 0.0)
+
+
+def test_exits_occur_before_terminal_stage():
+    # Variant (A): a path can exit at its very first stage, i.e. before ever
+    # raising (valuation still == entry_valuation). At least some should.
+    terms = _terms()
+    p = simulate_paths(_theta(), terms, SimControl(n_iterations=50_000, random_seed=5))
+    exited = p["status"] == PathStatus.EXITED
+    early = exited & np.isclose(p["valuation"], terms.entry_valuation)
+    assert early.sum() > 0
+
+
+def test_higher_stage_exit_prob_reduces_total_loss():
+    theta_lo = _theta()
+    theta_lo.stage_exit_prob = 0.05
+    theta_hi = _theta()
+    theta_hi.stage_exit_prob = 0.40
+    ctrl = SimControl(n_iterations=50_000, random_seed=9)
+    lo = simulate_paths(theta_lo, _terms(), ctrl)
+    hi = simulate_paths(theta_hi, _terms(), ctrl)
+    assert (hi["moic"] > 0).mean() > (lo["moic"] > 0).mean()

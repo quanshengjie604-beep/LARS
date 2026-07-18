@@ -81,6 +81,14 @@ class DistributionParams:
     tail_xm: float        # threshold at which the Pareto tail takes over
     tail_alpha: float     # tail index (~1.5-2.0 for VC power-law outcomes)
 
+    # Per-stage exit hazard: P(a liquidity event occurs at a stage the company
+    # reaches, before it attempts the next round). Enables exits at any stage,
+    # not just the terminal one. If None, it is derived from M5's p_none so that
+    # the compounded no-exit probability across all K opportunities equals p_none
+    # (see simulator). The exit *type* given an exit is drawn from M5 restricted
+    # to {ipo, acq, secondary}.
+    stage_exit_prob: float | None = None
+
     confidence_flag: str = "medium"   # high / medium / low (from attribution)
 
 
