@@ -84,6 +84,15 @@ def simulate_paths(
     moic = np.zeros(n, dtype=float)
     exit_type = np.full(n, EXIT_UNRESOLVED, dtype=np.int8)
     t_exit = np.full(n, np.nan, dtype=float)
+    t_end = np.full(n, np.nan, dtype=float)      # termination time for EVERY path
+
+    # Stage trajectory: which stage a path reached, and when it entered each one.
+    # stage index 0 = current_stage; +1 per successful raise. Column j holds the
+    # time the path entered stage j (nan if never reached); column 0 is t = 0.
+    n_transitions = len(params.round_progression)
+    stage_reached = np.zeros(n, dtype=np.int16)
+    stage_entry_t = np.full((n, n_transitions + 1), np.nan, dtype=float)
+    stage_entry_t[:, 0] = 0.0
 
     # ------------------------------------------------------------------
     # Spin up runway (characteristic lifespan of a startup)
@@ -111,9 +120,11 @@ def simulate_paths(
         nonlocal active
         failed = active & (t > t_fail)
         status[failed] = PathStatus.FAILED
+        t_end[failed] = t_fail[failed]          # died when cash ran out
         active &= ~failed
         censored = active & (t >= horizon)
         status[censored] = PathStatus.CENSORED
+        t_end[censored] = horizon               # still alive at the horizon
         active &= ~censored
 
     def _resolve_exits() -> None:
@@ -142,6 +153,7 @@ def simulate_paths(
 
         exit_type[exiting] = types[exiting]
         t_exit[exiting] = t[exiting]
+        t_end[exiting] = t[exiting]
         moic[exiting] = path_moic[exiting]
         status[exiting] = PathStatus.EXITED
         active &= ~exiting
@@ -149,7 +161,7 @@ def simulate_paths(
     # ------------------------------------------------------------------
     # Walk the stages: at each stage the company may die, exit, or raise on.
     # ------------------------------------------------------------------
-    for tr in params.round_progression:
+    for j, tr in enumerate(params.round_progression):
         # Time spent at the current stage before the next event.
         dt = draw_weibull(rng, params.t_next_k, params.t_next_lambda, n)
         t = np.where(active, t + dt, t)
@@ -162,7 +174,12 @@ def simulate_paths(
         raised, _ = draw_beta_bernoulli(rng, tr.series_alpha, tr.series_beta, n)
         stalled = active & ~raised
         status[stalled] = PathStatus.STALLED
+        t_end[stalled] = t[stalled]             # could not raise the next round
         active &= raised
+
+        # Record the stage the raisers just entered (for stage-segmented plots).
+        stage_reached[active] = j + 1
+        stage_entry_t[active, j + 1] = t[active]
 
         # Dilution + M4 growth apply to those who raised (now at the next stage).
         ownership = np.where(active, ownership * (1.0 - terms.dilution_per_round), ownership)
@@ -176,7 +193,9 @@ def simulate_paths(
     t = np.where(active, t + dt, t)
     _kill_by_time()
     _resolve_exits()
-    status[active] = PathStatus.CENSORED   # reached terminal, never got liquidity
+    survivors = active.copy()
+    status[survivors] = PathStatus.CENSORED   # reached terminal, never got liquidity
+    t_end[survivors] = t[survivors]
     active[:] = False
 
     # ------------------------------------------------------------------
@@ -193,8 +212,11 @@ def simulate_paths(
     return {
         "moic": moic,
         "t_exit": t_exit,
+        "t_end": t_end,
         "exit_type": exit_type,
         "status": status,
         "ownership": ownership,
         "valuation": valuation,
+        "stage_reached": stage_reached,
+        "stage_entry_t": stage_entry_t,
     }

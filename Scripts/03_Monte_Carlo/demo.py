@@ -11,6 +11,7 @@ directly). Run from the repo root as shown above.
 from __future__ import annotations
 
 import json
+import os
 
 from contracts import (
     DeterministicTerms,
@@ -20,6 +21,7 @@ from contracts import (
 )
 from aggregate import summarize
 from simulator import simulate_paths
+from Utilities.plot_paths import plot_paths, _stage_names_from
 
 
 def synthetic_theta() -> DistributionParams:
@@ -66,6 +68,22 @@ def main() -> None:
     result = summarize(paths, params, terms)
 
     print(json.dumps(result.__dict__, indent=2))
+
+    # Validation plot of the simulated life paths.
+    import matplotlib
+    matplotlib.use("Agg")  # headless: just write the PNG
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    out = os.path.join(repo_root, "Output", "mc_paths.png")
+    plot_paths(
+        paths,
+        horizon=terms.horizon_years,
+        stage_names=_stage_names_from(params),
+        n_show=1000,
+        sort_by="moic",
+        title=f"Monte Carlo company life paths ({params.opportunity_id})",
+        save_path=out,
+    )
 
 
 if __name__ == "__main__":
