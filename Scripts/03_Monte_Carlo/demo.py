@@ -21,7 +21,7 @@ from contracts import (
 )
 from aggregate import summarize
 from simulator import simulate_paths
-from Utilities.plot_paths import plot_paths, _stage_names_from
+from Utilities.plot_paths import plot_paths, plot_moic_bars, _stage_names_from
 
 
 def synthetic_theta() -> DistributionParams:
@@ -62,7 +62,8 @@ def thesis_terms() -> DeterministicTerms:
 def main() -> None:
     params = synthetic_theta()
     terms = thesis_terms()
-    control = SimControl(n_iterations=100_000, random_seed=42)
+    n_paths = 100_000
+    control = SimControl(n_iterations=n_paths, random_seed=42)
 
     paths = simulate_paths(params, terms, control)
     result = summarize(paths, params, terms)
@@ -75,14 +76,25 @@ def main() -> None:
 
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = os.path.join(repo_root, "Output", "mc_paths.png")
+    paths_fraction = n_paths * 0.05
     plot_paths(
         paths,
         horizon=terms.horizon_years,
         stage_names=_stage_names_from(params),
-        n_show=1000,
+        n_show=int(paths_fraction),
         sort_by="moic",
         title=f"Monte Carlo company life paths ({params.opportunity_id})",
         save_path=out,
+    )
+
+    out_moic = os.path.join(repo_root, "Output", "mc_moic.png")
+    plot_moic_bars(
+        paths,
+        n_show=n_paths,
+        sort_by="moic",
+        benchmark=30.0,
+        title=f"Monte Carlo MOIC by path ({params.opportunity_id})",
+        save_path=out_moic,
     )
 
 

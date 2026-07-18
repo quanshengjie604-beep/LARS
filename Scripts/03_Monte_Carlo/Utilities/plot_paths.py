@@ -201,6 +201,82 @@ def plot_paths(
     return fig, ax
 
 
+def plot_moic_bars(
+    paths: dict[str, np.ndarray],
+    n_show: int = 1000,
+    sort_by: str = "moic",
+    benchmark: float = 30.0,
+    sample_seed: int = 0,
+    title: str | None = None,
+    save_path: str | None = None,
+    show: bool = False,
+):
+    """Bar chart of per-path MOIC with a horizontal VC-benchmark reference line.
+
+    paths     : dict from simulate_paths (needs moic).
+    n_show    : max number of bars to draw (random sample if fewer than N).
+    sort_by   : 'moic' (ascending, monotonic) | 'none'.
+    benchmark : MOIC level for the "VC Benchmark Return" reference line.
+
+    Total-loss paths (MOIC == 0) are excluded so the chart shows only the paths
+    that returned something; the legend still reports shares of the full run.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+
+    moic = np.asarray(paths["moic"], dtype=float)
+    n = moic.size
+
+    # Keep only paths that returned capital (drop the MOIC == 0 total losses).
+    idx = np.flatnonzero(moic > 0)
+    n_returning = idx.size
+    if n_returning > n_show:
+        idx = np.random.default_rng(sample_seed).choice(idx, size=n_show, replace=False)
+    if sort_by == "moic":
+        idx = idx[np.argsort(moic[idx], kind="stable")]
+
+    m = moic[idx]
+    x = np.arange(idx.size)
+    beats = m >= benchmark
+    bar_colors = np.where(beats, "#f1c40f", "#4c78a8")
+
+    width = max(6.0, min(0.012 * idx.size, 20.0))
+    fig, ax = plt.subplots(figsize=(width, 6))
+    ax.bar(x, m, width=1.0, color=bar_colors, linewidth=0)
+
+    ax.axhline(benchmark, ls="--", lw=1.6, color="#c0392b", zorder=5)
+    ax.text(0.0, benchmark, f"  VC Benchmark Return ({benchmark:g}x)",
+            va="bottom", ha="left", color="#c0392b", fontsize=9, zorder=6)
+
+    y_top = (m.max() if m.size else benchmark)
+    ax.set_xlim(-0.5, max(idx.size - 0.5, 0.5))
+    ax.set_ylim(0, max(y_top, benchmark) * 1.08)
+    ax.set_xlabel(
+        f"Path #  (sample of {idx.size:,} of {n_returning:,} returning paths; "
+        f"{n:,} total, sorted by {sort_by})"
+    )
+    ax.set_ylabel("MOIC")
+    ax.set_title(title or "Monte Carlo MOIC by path (excl. total losses)")
+
+    share = float(np.mean(moic >= benchmark))
+    handles = [
+        Patch(color="#f1c40f", label=f"MOIC ≥ benchmark ({share:.1%} of all paths)"),
+        Patch(color="#4c78a8", label="MOIC < benchmark"),
+        Line2D([0], [0], ls="--", color="#c0392b", label="VC Benchmark Return"),
+    ]
+    ax.legend(handles=handles, loc="upper left", framealpha=0.9, fontsize=8)
+
+    fig.tight_layout()
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig.savefig(save_path, dpi=150)
+        print(f"saved: {save_path}")
+    if show:
+        plt.show()
+    return fig, ax
+
+
 def _stage_names_from(params) -> list[str]:
     rp = params.round_progression
     if not rp:
