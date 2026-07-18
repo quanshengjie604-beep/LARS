@@ -1,0 +1,7 @@
+/Output*/
+/Data/*
+/venv
+*.egg-info/
+.idea/
+__pyc*
+*.pdf
