@@ -21,7 +21,12 @@ from contracts import (
 )
 from aggregate import summarize
 from simulator import simulate_paths
-from Utilities.plot_paths import plot_paths, plot_moic_bars, _stage_names_from
+from Utilities.plot_paths import (
+    plot_paths,
+    plot_moic_bars,
+    plot_dashboard,
+    _stage_names_from,
+)
 
 
 def synthetic_theta() -> DistributionParams:
@@ -95,6 +100,16 @@ def main() -> None:
         benchmark=30.0,
         title=f"Monte Carlo MOIC by path ({params.opportunity_id})",
         save_path=out_moic,
+    )
+
+    out_dash = os.path.join(repo_root, "Output", "mc_dashboard.png")
+    plot_dashboard(
+        paths,
+        stage_names=_stage_names_from(params),
+        benchmark=30.0,
+        opportunity_id=params.opportunity_id,
+        n_iterations=n_paths,
+        save_path=out_dash,
     )
 
 

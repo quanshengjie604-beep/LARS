@@ -277,6 +277,141 @@ def plot_moic_bars(
     return fig, ax
 
 
+# Validated reference palette (light mode) from the dataviz design system.
+_INK, _INK2, _MUTED = "#0b0b0b", "#52514e", "#898781"
+_GRID, _AXIS = "#e1e0d9", "#c3c2b7"
+_SURFACE, _PAGE = "#fcfcfb", "#f9f9f7"
+_GOOD, _CRIT, _BLUE = "#0ca30c", "#d03b3b", "#2a78d6"
+
+
+def plot_dashboard(
+    paths: dict[str, np.ndarray],
+    stage_names: list[str],
+    benchmark: float = 30.0,
+    opportunity_id: str = "",
+    n_iterations: int | None = None,
+    title: str | None = None,
+    save_path: str | None = None,
+    show: bool = False,
+):
+    """Decision dashboard: survival, benchmark odds, and per-round death/exit.
+
+    Four panels:
+      * P(survival)              -- share of paths with MOIC > 0
+      * P(beat VC benchmark)     -- share of paths with MOIC >= benchmark
+      * P(death | reached round) -- per-round death hazard
+      * P(exit  | reached round) -- per-round exit hazard
+
+    The two per-round panels are *conditional on the company reaching that round*,
+    so they read as a funnel hazard rather than being dominated by early attrition.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import PercentFormatter
+    from matplotlib.patches import Rectangle
+
+    moic = np.asarray(paths["moic"], dtype=float)
+    status = np.asarray(paths["status"])
+    stage_reached = np.asarray(paths["stage_reached"], dtype=int)
+    n = moic.size
+    k = len(stage_names)
+
+    p_survival = float(np.mean(moic > 0))
+    p_benchmark = float(np.mean(moic >= benchmark))
+
+    reached = np.array([np.sum(stage_reached >= j) for j in range(k)], dtype=float)
+    died = np.array(
+        [np.sum((status == PathStatus.FAILED) & (stage_reached == j)) for j in range(k)],
+        dtype=float,
+    )
+    exited = np.array(
+        [np.sum((status == PathStatus.EXITED) & (stage_reached == j)) for j in range(k)],
+        dtype=float,
+    )
+    with np.errstate(divide="ignore", invalid="ignore"):
+        p_death = np.where(reached > 0, died / reached, 0.0)
+        p_exit = np.where(reached > 0, exited / reached, 0.0)
+
+    fig = plt.figure(figsize=(13, 8.5), facecolor=_PAGE)
+    gs = fig.add_gridspec(
+        2, 2, height_ratios=[0.8, 1.3], hspace=0.42, wspace=0.16,
+        left=0.065, right=0.96, top=0.83, bottom=0.09,
+    )
+
+    # --- KPI tiles -------------------------------------------------------------
+    def _kpi(ax, value: float, label: str, color: str, sub: str) -> None:
+        ax.set_axis_off()
+        ax.add_patch(Rectangle((0.0, 0.0), 1.0, 1.0, transform=ax.transAxes,
+                     facecolor=_SURFACE, edgecolor=_GRID, linewidth=1.3, zorder=0))
+        # colored accent stripe on the left edge
+        ax.add_patch(Rectangle((0.0, 0.0), 0.012, 1.0, transform=ax.transAxes,
+                     facecolor=color, edgecolor="none", zorder=1))
+        ax.text(0.06, 0.83, label, transform=ax.transAxes, fontsize=12.5,
+                color=_INK2, va="top", ha="left")
+        ax.text(0.055, 0.52, f"{value:.1%}", transform=ax.transAxes, fontsize=46,
+                color=_INK, va="center", ha="left", fontweight="bold")
+        ax.add_patch(Rectangle((0.06, 0.20), 0.88, 0.075, transform=ax.transAxes,
+                     facecolor=_GRID, edgecolor="none", zorder=1))
+        ax.add_patch(Rectangle((0.06, 0.20), 0.88 * min(max(value, 0.0), 1.0), 0.075,
+                     transform=ax.transAxes, facecolor=color, edgecolor="none", zorder=2))
+        ax.text(0.06, 0.10, sub, transform=ax.transAxes, fontsize=9.5,
+                color=_MUTED, va="center", ha="left")
+
+    ax1 = fig.add_subplot(gs[0, 0])
+    _kpi(ax1, p_survival, "Probability of survival   (MOIC > 0)", _GOOD,
+         f"{p_survival * n:,.0f} of {n:,} paths returned capital")
+
+    ax2 = fig.add_subplot(gs[0, 1])
+    _kpi(ax2, p_benchmark,
+         f"Probability of beating the VC benchmark   (MOIC ≥ {benchmark:g}x)", _BLUE,
+         f"{p_benchmark * n:,.0f} of {n:,} paths cleared {benchmark:g}x")
+
+    # --- per-round bar charts --------------------------------------------------
+    def _bars(ax, vals: np.ndarray, color: str, title_txt: str, ylab: str) -> None:
+        xs = np.arange(k)
+        rects = ax.bar(xs, vals, width=0.62, color=color, zorder=3)
+        ax.set_title(title_txt, fontsize=13, color=_INK, loc="left", pad=10,
+                     fontweight="bold")
+        ax.set_xticks(xs)
+        ax.set_xticklabels(stage_names)
+        ax.set_ylim(0, max(float(vals.max()) * 1.30, 0.02))
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
+        ax.set_ylabel(ylab, fontsize=10, color=_INK2)
+        ax.set_facecolor(_SURFACE)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color(_AXIS)
+        ax.spines["bottom"].set_color(_AXIS)
+        ax.tick_params(colors=_MUTED, labelsize=10)
+        ax.grid(axis="y", color=_GRID, linewidth=0.8)
+        ax.set_axisbelow(True)
+        for rect, v in zip(rects, vals):
+            ax.text(rect.get_x() + rect.get_width() / 2, v, f"{v:.1%}",
+                    ha="center", va="bottom", fontsize=10, color=_INK2)
+
+    ax3 = fig.add_subplot(gs[1, 0])
+    _bars(ax3, p_death, _CRIT, "Probability of dying in each round",
+          "P(death | reached round)")
+    ax4 = fig.add_subplot(gs[1, 1])
+    _bars(ax4, p_exit, _GOOD, "Probability of exiting in each round",
+          "P(exit | reached round)")
+
+    head = title or "VC Brain — Monte Carlo Decision Dashboard"
+    fig.text(0.065, 0.93, head, ha="left", fontsize=18, fontweight="bold", color=_INK)
+    bits = [b for b in (opportunity_id,
+                        f"{n_iterations:,} simulated paths" if n_iterations else "",
+                        "competing-risks stage-jump model") if b]
+    fig.text(0.065, 0.885, "     ·     ".join(bits), ha="left",
+             fontsize=10.5, color=_MUTED)
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig.savefig(save_path, dpi=150, facecolor=_PAGE)
+        print(f"saved: {save_path}")
+    if show:
+        plt.show()
+    return fig
+
+
 def _stage_names_from(params) -> list[str]:
     rp = params.round_progression
     if not rp:
