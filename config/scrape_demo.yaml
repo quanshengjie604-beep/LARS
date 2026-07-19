@@ -1,0 +1,20 @@
+project:
+  random_state: 42
+  model_dir: artifacts/scrape_demo_checkpoint
+  report_dir: artifacts/scrape_demo_reports
+
+data:
+  training_features: scrape_latest/ngboost_ready/demo_training_features.jsonl
+  training_outcomes: scrape_latest/ngboost_ready/demo_training_outcomes.jsonl
+  inference_requests: scrape_latest/ngboost_ready/inference_requests.jsonl
+  evidence_registry: scrape_latest/evidence_registry.jsonl
+
+training:
+  minimum_rows: 20
+  validation_fraction: 0.2
+  strict_backend: false
+  models: [m1, m2, m3, m4, m5, m6]
+
+inference:
+  quantiles: [0.1, 0.5, 0.9]
+  survival_horizons_days: [365, 730, 1825]
