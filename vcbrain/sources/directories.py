@@ -15,10 +15,13 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
 import html
 import io
 import json
+import os
 import re
+import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -244,7 +247,17 @@ def _attach_evidence(company: Company, evidence: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Y Combinator: explicitly supplied, authorised export only
+# Y Combinator: authorised local export, or an auto-scrape of the public
+# Algolia-backed company directory when no export is supplied.
+
+YC_COMPANIES_URL = "https://www.ycombinator.com/companies"
+YC_ALGOLIA_SCRAPER_ENV = "VCBRAIN_YC_SCRAPER"
+# Relative locations of the bundled Algolia extractor, tried under the repo root
+# and the working directory when no explicit path or env override is given.
+_YC_SCRAPER_CANDIDATES: tuple[tuple[str, ...], ...] = (
+    ("yc-scraper", "algolia_extractor.py"),
+    ("algolia_extractor.py",),
+)
 
 
 def parse_yc_json(text: str) -> list[dict[str, Any]]:
@@ -395,6 +408,163 @@ async def load_yc_export(
         return _result(YC_SOURCE, collected_at=stamp, companies=companies, evidence=evidence)
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError, csv.Error) as exc:
         return _result(YC_SOURCE, collected_at=stamp, errors=[f"YC export: {exc}"])
+
+
+def _find_yc_scraper(explicit: str | Path | None = None) -> Path | None:
+    """Locate the bundled Algolia extractor without importing it.
+
+    An explicit path (CLI ``--yc-scraper-path``) is authoritative: if it does not
+    exist we return ``None`` rather than silently falling back, so a wrong path
+    surfaces as a skip.  Otherwise the ``VCBRAIN_YC_SCRAPER`` env override and
+    then repo-root/working-directory relatives are tried in order.
+    """
+    if explicit is not None:
+        candidate = Path(explicit)
+        return candidate if candidate.is_file() else None
+    env_value = os.environ.get(YC_ALGOLIA_SCRAPER_ENV)
+    if env_value:
+        candidate = Path(env_value)
+        if candidate.is_file():
+            return candidate
+    for root in (Path(__file__).resolve().parents[2], Path.cwd()):
+        for parts in _YC_SCRAPER_CANDIDATES:
+            candidate = root.joinpath(*parts)
+            if candidate.is_file():
+                return candidate
+    return None
+
+
+def _load_yc_scraper_extract(path: Path) -> Callable[..., list[dict[str, Any]]]:
+    """Import ``extract()`` from the extractor file without touching ``sys.path``."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("vcbrain._yc_algolia_extractor", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load YC Algolia scraper at {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    extract = getattr(module, "extract", None)
+    if not callable(extract):
+        raise ImportError(f"{path} does not define an extract() function")
+    return extract
+
+
+def _yc_algolia_cache_path(
+    settings: Settings | None, recent: int | None, batches: Sequence[str] | None
+) -> Path | None:
+    if settings is None:
+        return None
+    key = json.dumps({"recent": recent, "batches": sorted(batches or [])}, sort_keys=True)
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    return settings.cache_dir / "yc_algolia" / f"{digest}.json"
+
+
+def _read_yc_cache(path: Path, ttl: int) -> list[dict[str, Any]] | None:
+    try:
+        if ttl >= 0 and (time.time() - path.stat().st_mtime) > ttl:
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _write_yc_cache(path: Path, records: list[dict[str, Any]]) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:  # cache is best-effort; never fail a scrape over it
+        pass
+
+
+async def fetch_yc_algolia(
+    *,
+    settings: Settings | None = None,
+    collected_at: str | None = None,
+    scraper_path: str | Path | None = None,
+    recent: int | None = None,
+    batches: Sequence[str] | None = None,
+    cache: bool = True,
+    extract_fn: Callable[..., list[dict[str, Any]]] | None = None,
+) -> DirectoryResult:
+    """Auto-scrape YC's public company directory via the bundled Algolia extractor.
+
+    This is the fallback ``--sources yc`` uses when no authorised ``--yc-export``
+    is provided.  It reuses ``yc-scraper/algolia_extractor.py`` (the maintained
+    Algolia client) instead of reimplementing YC's search protocol, running its
+    blocking ``extract()`` in a worker thread so other sources keep progressing.
+    Records are cached under the settings cache directory so repeated runs do not
+    re-query YC.  Every failure degrades to a structured ``SourceRun`` — a missing
+    scraper is a skip, a scrape or load error is a recorded error — never a crash.
+    """
+    stamp = _stamp(collected_at)
+    batch_filter = list(batches) if batches else None
+
+    cache_path = _yc_algolia_cache_path(settings, recent, batch_filter) if cache else None
+    ttl = settings.cache_ttl_seconds if settings else -1
+    records: list[dict[str, Any]] | None = None
+    if cache_path is not None:
+        records = await asyncio.to_thread(_read_yc_cache, cache_path, ttl)
+
+    scraped = False
+    if records is None:
+        extract = extract_fn
+        if extract is None:
+            scraper = _find_yc_scraper(scraper_path)
+            if scraper is None:
+                return _result(
+                    YC_SOURCE,
+                    collected_at=stamp,
+                    status="skipped",
+                    skipped_reason="yc_algolia_scraper_not_found",
+                )
+            try:
+                extract = await asyncio.to_thread(_load_yc_scraper_extract, scraper)
+            except Exception as exc:  # source isolation is intentional at adapter boundaries
+                return _result(YC_SOURCE, collected_at=stamp, errors=[f"YC Algolia scraper load: {exc}"])
+        try:
+            records = await asyncio.to_thread(extract, recent, batch_filter)
+        except Exception as exc:  # see source-isolation note above
+            return _result(YC_SOURCE, collected_at=stamp, errors=[f"YC Algolia scrape: {exc}"])
+        scraped = True
+
+    companies = _in_scope(parse_yc_records(records), settings)
+    evidence = []
+    for company in companies:
+        details = [f"The public Y Combinator company directory lists {company.name}"]
+        if company.batches:
+            details.append(f"in cohort {', '.join(company.batches)}")
+        details.append(
+            "; retrieved from YC's Algolia-backed directory and not treated as a funding date."
+        )
+        item = make_evidence(
+            startup_id=company.startup_id,
+            channel="yc_algolia_directory",
+            source_type="manual_research",
+            document_name="Y Combinator public company directory (Algolia)",
+            source_uri=company.directory_urls[0] if company.directory_urls else YC_COMPANIES_URL,
+            document_date=_snapshot_date(stamp),
+            collected_at=stamp,
+            location=company.directory_urls[0] if company.directory_urls else None,
+            excerpt=" ".join(details),
+            verification_status="document_verified",
+            confidence="medium",
+        )
+        _attach_evidence(company, item)
+        evidence.append(item)
+
+    if scraped and cache_path is not None and records:
+        await asyncio.to_thread(_write_yc_cache, cache_path, records)
+
+    return _result(
+        YC_SOURCE,
+        collected_at=stamp,
+        companies=companies,
+        evidence=evidence,
+        requests=1 if scraped else 0,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1048,6 +1218,8 @@ __all__ = [
     "A16Z_PORTFOLIO_URL",
     "PEAR_WP_API",
     "STARTX_CONSIDER_API",
+    "YC_ALGOLIA_SCRAPER_ENV",
+    "YC_COMPANIES_URL",
     "collect_a16z_directory",
     "collect_pear_directory",
     "collect_startx_directory",
@@ -1055,6 +1227,7 @@ __all__ = [
     "fetch_a16z_directory",
     "fetch_pear_directory",
     "fetch_startx_directory",
+    "fetch_yc_algolia",
     "load_yc_export",
     "parse_a16z_investment_list_html",
     "parse_a16z_portfolio_html",

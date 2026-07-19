@@ -1,0 +1,23 @@
+{
+  "as_of": "2026-07-18",
+  "collected_at": "2026-07-19T05:31:26Z",
+  "companies_discovered": 6168,
+  "companies_processed": 6168,
+  "enrichment_tasks": 1219,
+  "evidence_records": 14606,
+  "financial_disclosures": 106,
+  "funding_rounds": 53,
+  "inference_requests": 0,
+  "source_status": {
+    "a16z": "ok",
+    "github": "skipped",
+    "hackernews": "partial",
+    "pear": "ok",
+    "producthunt": "skipped",
+    "sec_form_d": "skipped",
+    "startx": "skipped",
+    "yc": "ok"
+  },
+  "training_features": 53,
+  "training_outcomes": 53
+}

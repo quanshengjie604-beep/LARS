@@ -10,6 +10,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable, Sequence
 
+from tqdm import tqdm
+
 from .assemble import FEATURE_FIELDS, build_snapshot, build_training_records
 from .config import Settings
 from .context import CohortContext
@@ -19,7 +21,13 @@ from .extract import dedupe_funding_rounds
 from .http import AsyncHttpClient, Fetcher
 from .models import Company, DirectoryResult, EnrichmentResult, Evidence, FundingRound, SourceRun, merge_companies
 from .postprocess import extract_financial_disclosures, postprocess_snapshots
-from .sources import fetch_a16z_directory, fetch_pear_directory, fetch_startx_directory, load_yc_export
+from .sources import (
+    fetch_a16z_directory,
+    fetch_pear_directory,
+    fetch_startx_directory,
+    fetch_yc_algolia,
+    load_yc_export,
+)
 from .sources.enrichment import enrich_github, enrich_hackernews, enrich_producthunt
 from .sources.sec import collect_form_d
 from .util import parse_date, utc_now_iso
@@ -31,6 +39,10 @@ class CollectionConfig:
     settings: Settings = field(default_factory=Settings.from_env)
     directories: tuple[str, ...] = ("a16z", "pear", "yc", "startx")
     yc_export: Path | None = None
+    use_yc_scraper: bool = True
+    yc_scraper_path: Path | None = None
+    yc_recent: int | None = None
+    yc_batches: tuple[str, ...] = ()
     sec_form_d_zips: tuple[Path, ...] = ()
     limit: int | None = 25
     mode: str = "both"  # inference | training | both
@@ -160,7 +172,22 @@ async def _discover(
     selected = {source.casefold() for source in config.directories}
     jobs: list[Awaitable[DirectoryResult]] = []
     if "yc" in selected:
-        jobs.append(load_yc_export(config.yc_export, settings=config.settings, collected_at=collected_at))
+        if config.yc_export is not None:
+            jobs.append(load_yc_export(config.yc_export, settings=config.settings, collected_at=collected_at))
+        elif config.use_yc_scraper:
+            # No authorised export supplied: auto-run the bundled Algolia scraper.
+            jobs.append(
+                fetch_yc_algolia(
+                    settings=config.settings,
+                    collected_at=collected_at,
+                    scraper_path=config.yc_scraper_path,
+                    recent=config.yc_recent,
+                    batches=config.yc_batches or None,
+                )
+            )
+        else:
+            # Scraper disabled and no export: a structured skip, not a scrape.
+            jobs.append(load_yc_export(None, settings=config.settings, collected_at=collected_at))
     if "a16z" in selected:
         jobs.append(fetch_a16z_directory(fetcher, settings=config.settings, collected_at=collected_at))
     if "startx" in selected:
@@ -183,23 +210,25 @@ async def _discover(
         )
     results = await asyncio.gather(*jobs, return_exceptions=True)
     normalized: list[DirectoryResult] = []
-    for result in results:
-        if isinstance(result, DirectoryResult):
-            normalized.append(result)
-        else:
-            source = "directory_unknown"
-            normalized.append(
-                DirectoryResult(
-                    source=source,
-                    run=SourceRun(
+    with tqdm(total=len(results), desc="Discovering companies from directories", unit="source") as pbar:
+        for result in results:
+            if isinstance(result, DirectoryResult):
+                normalized.append(result)
+            else:
+                source = "directory_unknown"
+                normalized.append(
+                    DirectoryResult(
                         source=source,
-                        status="error",
-                        started_at=collected_at,
-                        finished_at=collected_at,
-                        errors=[str(result)],
-                    ),
+                        run=SourceRun(
+                            source=source,
+                            status="error",
+                            started_at=collected_at,
+                            finished_at=collected_at,
+                            errors=[str(result)],
+                        ),
+                    )
                 )
-            )
+            pbar.update(1)
     return sorted(normalized, key=lambda item: item.source)
 
 
@@ -224,6 +253,15 @@ async def _enrich_companies(
 
     queue: asyncio.Queue[tuple[Company, str] | None] = asyncio.Queue(maxsize=max(2, config.settings.concurrency * 2))
     results: list[EnrichmentResult] = []
+
+    # Count total enrichment tasks
+    total_tasks = sum(
+        1 for company in companies
+        for source in enabled
+        if not (source == "producthunt" and not company.website)
+        and not (source == "github" and company not in explicit_github)
+    )
+    pbar = tqdm(total=total_tasks, desc="Enriching company data", unit="task")
 
     async def producer() -> None:
         for company in companies:
@@ -260,6 +298,7 @@ async def _enrich_companies(
                 except Exception as exc:
                     results.append(EnrichmentResult(source, company.startup_id, errors=[str(exc)]))
             finally:
+                pbar.update(1)
                 queue.task_done()
 
     worker_count = max(1, min(config.settings.concurrency, len(companies) * max(1, len(enabled))))
@@ -267,6 +306,7 @@ async def _enrich_companies(
     await producer()
     await queue.join()
     await asyncio.gather(*workers)
+    pbar.close()
     results.sort(key=lambda item: (item.startup_id, item.source))
 
     source_runs = list(skipped)
@@ -384,39 +424,41 @@ async def _collect_with_fetcher(config: CollectionConfig, fetcher: Fetcher) -> C
     training_features: list[dict[str, Any]] = []
     training_outcomes: list[dict[str, Any]] = []
     derived_evidence: list[Evidence] = []
-    for company in targets:
-        company_rounds = [round_ for round_ in rounds if round_.startup_id == company.startup_id]
-        company_disclosures = [
-            row for row in disclosure_rows if row.get("startup_id") == company.startup_id
-        ]
-        if config.mode in {"training", "both"}:
-            features, outcomes, derived = build_training_records(
-                company,
-                rounds=company_rounds,
-                all_evidence=all_evidence,
-                signals=signals.get(company.startup_id, {}),
-                context=context,
-                disclosures=company_disclosures,
-                as_of=config.settings.as_of,
-                collected_at=collected_at,
-            )
-            training_features.extend(features)
-            training_outcomes.extend(outcomes)
-            derived_evidence.extend(derived)
-        if config.mode in {"inference", "both"}:
-            build = build_snapshot(
-                company,
-                cutoff=config.settings.as_of,
-                live=True,
-                rounds=company_rounds,
-                evidence=all_evidence,
-                signals=signals.get(company.startup_id, {}),
-                context=context,
-                disclosures=company_disclosures,
-                collected_at=collected_at,
-            )
-            inference.append(build.record)
-            derived_evidence.extend(build.evidence)
+    with tqdm(total=len(targets), desc="Building company snapshots", unit="company") as pbar:
+        for company in targets:
+            company_rounds = [round_ for round_ in rounds if round_.startup_id == company.startup_id]
+            company_disclosures = [
+                row for row in disclosure_rows if row.get("startup_id") == company.startup_id
+            ]
+            if config.mode in {"training", "both"}:
+                features, outcomes, derived = build_training_records(
+                    company,
+                    rounds=company_rounds,
+                    all_evidence=all_evidence,
+                    signals=signals.get(company.startup_id, {}),
+                    context=context,
+                    disclosures=company_disclosures,
+                    as_of=config.settings.as_of,
+                    collected_at=collected_at,
+                )
+                training_features.extend(features)
+                training_outcomes.extend(outcomes)
+                derived_evidence.extend(derived)
+            if config.mode in {"inference", "both"}:
+                build = build_snapshot(
+                    company,
+                    cutoff=config.settings.as_of,
+                    live=True,
+                    rounds=company_rounds,
+                    evidence=all_evidence,
+                    signals=signals.get(company.startup_id, {}),
+                    context=context,
+                    disclosures=company_disclosures,
+                    collected_at=collected_at,
+                )
+                inference.append(build.record)
+                derived_evidence.extend(build.evidence)
+            pbar.update(1)
 
     all_evidence = dedupe_evidence([*all_evidence, *derived_evidence])
     source_runs = sorted([*directory_runs, *enrichment_runs, sec_run], key=lambda item: item.source)

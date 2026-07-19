@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>YC Directory Explorer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="owner-info">
+        <span class="owner-name">Built by Tario You</span>
+        <a
+          class="owner-link"
+          href="https://www.linkedin.com/in/tario-you"
+          target="_blank"
+          rel="noopener"
+        >
+          LinkedIn
+        </a>
+      </div>
+      <h1>YC Directory Explorer</h1>
+      <p id="lastScraped" class="last-scraped"></p>
+      <p>
+        Browse and filter the latest YC companies by batch, tags, or any keyword.
+      </p>
+    </header>
+
+    <main class="layout">
+      <section class="filters">
+        <div class="filter-group">
+          <label for="searchInput">Keyword Search</label>
+          <input
+            id="searchInput"
+            type="search"
+            placeholder="Search by name, description, founder, location, etc."
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="filter-group">
+          <label for="batchSelect">Filter by Batch</label>
+          <select id="batchSelect" multiple size="8"></select>
+          <small>Hold ⌘/Ctrl to select multiple batches.</small>
+        </div>
+
+        <div class="filter-group">
+          <label for="tagSelect">Filter by Tags</label>
+          <select id="tagSelect" multiple size="10"></select>
+          <small>Results must include all selected tags.</small>
+        </div>
+
+        <button id="clearFilters" type="button">Clear Filters</button>
+      </section>
+
+      <section class="results">
+        <div class="results-header">
+          <div class="results-meta">
+            <h2>Companies</h2>
+            <span id="resultCount"></span>
+          </div>
+          <div class="sort-controls">
+            <label class="sort-label" for="sortSelect">Sort</label>
+            <select id="sortSelect">
+              <option value="batch">Batch (Newest)</option>
+              <option value="name">Alphabetical</option>
+            </select>
+            <button
+              id="sortDirection"
+              type="button"
+              aria-label="Toggle sort direction"
+              data-direction="desc"
+            >
+              Descending ↓
+            </button>
+            <button
+              id="downloadJson"
+              class="download-button"
+              type="button"
+            >
+              Download JSON
+            </button>
+          </div>
+        </div>
+        <div id="resultsContainer" class="results-grid"></div>
+      </section>
+    </main>
+
+    <template id="companyTemplate">
+      <article class="card">
+        <header>
+          <h3 class="company-name"></h3>
+          <p class="company-batch"></p>
+        </header>
+        <p class="company-description"></p>
+        <p class="company-long"></p>
+        <ul class="meta">
+          <li><strong>Status:</strong> <span class="company-status"></span></li>
+          <li>
+            <strong>Location:</strong> <span class="company-location"></span>
+          </li>
+          <li>
+            <strong>Team size:</strong> <span class="company-team"></span>
+          </li>
+          <li><strong>Year founded:</strong> <span class="company-year"></span></li>
+          <li><strong>Founders:</strong> <div class="company-founders"></div></li>
+          <li>
+            <strong>Website:</strong>
+            <a class="company-website" target="_blank" rel="noopener"></a>
+          </li>
+          <li>
+            <strong>Crunchbase:</strong>
+            <a class="company-cb" target="_blank" rel="noopener"></a>
+          </li>
+          <li>
+            <strong>LinkedIn:</strong>
+            <a class="company-linkedin" target="_blank" rel="noopener"></a>
+          </li>
+        </ul>
+        <div class="tags"></div>
+      </article>
+    </template>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

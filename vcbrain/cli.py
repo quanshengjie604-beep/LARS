@@ -52,6 +52,10 @@ async def _collect_command(args: argparse.Namespace) -> int:
         settings=settings,
         directories=tuple(part.strip() for part in args.sources.split(",") if part.strip()),
         yc_export=Path(args.yc_export) if args.yc_export else None,
+        use_yc_scraper=not args.no_yc_scraper,
+        yc_scraper_path=Path(args.yc_scraper_path) if args.yc_scraper_path else None,
+        yc_recent=args.yc_recent,
+        yc_batches=tuple(args.yc_batches or ()),
         sec_form_d_zips=_paths(args.sec_form_d),
         limit=None if args.limit == 0 else args.limit,
         mode=args.mode,
@@ -125,7 +129,28 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     collect_parser = sub.add_parser("collect", help="collect a startup cohort in parallel")
     collect_parser.add_argument("--sources", default="a16z,pear,yc,startx")
-    collect_parser.add_argument("--yc-export", help="authorised YC JSON/CSV export")
+    collect_parser.add_argument(
+        "--yc-export",
+        help="authorised YC JSON/CSV export; omit to auto-scrape the YC Algolia directory",
+    )
+    collect_parser.add_argument(
+        "--no-yc-scraper",
+        action="store_true",
+        help="disable the YC Algolia auto-scrape (skip YC unless --yc-export is given)",
+    )
+    collect_parser.add_argument(
+        "--yc-scraper-path",
+        help="path to algolia_extractor.py (defaults to the bundled yc-scraper/ or $VCBRAIN_YC_SCRAPER)",
+    )
+    collect_parser.add_argument(
+        "--yc-recent", type=int, metavar="N", help="auto-scrape only the N most recent YC batches"
+    )
+    collect_parser.add_argument(
+        "--yc-batches",
+        nargs="+",
+        metavar="BATCH",
+        help='auto-scrape only these YC batches, e.g. "Winter 2024" "Summer 2024"',
+    )
     collect_parser.add_argument("--sec-form-d", action="append", default=[], metavar="ZIP_OR_DIR")
     collect_parser.add_argument("--limit", type=int, default=25, help="0 means all discovered companies")
     collect_parser.add_argument("--mode", choices=("inference", "training", "both"), default="both")

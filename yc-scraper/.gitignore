@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.vscode/
+.ipynb_checkpoints/
+*.ipynb
+
+# System
+.DS_Store
+*~
+
+# Logs
+geckodriver.log
+
+# Generated/Output files
+output.jl
+output.json
+output.csv
+companies.json
+start_urls.txt
+url_cache.json
+scrape_checkpoint.json
+data/
+enrich.log

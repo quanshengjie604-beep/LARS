@@ -337,6 +337,127 @@ def _round_verification(record: Mapping[str, Any]) -> Any:
     return _first(record, "verification_status", "verification", "evidence_status", "confidence")
 
 
+def _progression_keys(record: Mapping[str, Any]) -> list[str]:
+    """Keys used to link a company to its funding rounds (id first, name fallback)."""
+
+    keys: list[str] = []
+    identifier = _company_id(record)
+    if _present(identifier):
+        keys.append("id:" + str(identifier).strip().casefold())
+    name = _company_name(record)
+    if _present(name):
+        keys.append("name:" + str(name).strip().casefold())
+    return keys
+
+
+def _progression_step(record: Mapping[str, Any]) -> dict[str, Any]:
+    round_date, _ = _round_date(record)
+    year = _date_year(round_date)
+    amount = _number(_round_amount(record))
+    stage = _round_stage(record) or record.get("raw_stage")
+    if amount is not None:
+        label = _format_money(amount)
+    elif _present(stage):
+        label = _humanize(stage)
+    elif year is not None:
+        label = str(year)
+    else:
+        label = "round"
+    return {
+        "year": year,
+        "amount": amount,
+        "label": label,
+        "sort_date": _plain(round_date),
+        "stable": _stable_json(record),
+    }
+
+
+def _funding_progressions(rounds: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Group rounds by company key into time-ordered progression steps.
+
+    A round is filed under every key it exposes (id and/or name) so a company
+    can be matched by whichever identifier it carries.  Rounds are deduplicated
+    per group by ``round_id`` (or a stable fingerprint) to tolerate a round that
+    appears under multiple keys or is repeated across inputs.
+    """
+
+    groups: dict[str, dict[str, dict[str, Any]]] = {}
+    for record in rounds:
+        dedupe = _plain(_first(record, "round_id"))
+        if dedupe == _NOT_FOUND:
+            dedupe = _stable_json(record)
+        for key in _progression_keys(record):
+            groups.setdefault(key, {})[dedupe] = record
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for key, members in groups.items():
+        steps = [_progression_step(record) for record in members.values()]
+        steps.sort(
+            key=lambda step: (
+                step["sort_date"],
+                step["amount"] if step["amount"] is not None else math.inf,
+                step["stable"],
+            )
+        )
+        result[key] = steps
+    return result
+
+
+def _company_steps(
+    record: Mapping[str, Any], progressions: Mapping[str, list[dict[str, Any]]]
+) -> list[dict[str, Any]]:
+    for key in _progression_keys(record):
+        steps = progressions.get(key)
+        if steps:
+            return steps
+    return []
+
+
+def _progression_direction(prev: dict[str, Any], current: dict[str, Any]) -> str:
+    prior, latest = prev["amount"], current["amount"]
+    if prior is not None and latest is not None:
+        if latest > prior:
+            return "up"
+        if latest < prior:
+            return "down"
+    return "flat"
+
+
+_ARROW_GLYPH = {"up": "↑", "down": "↓", "flat": "→"}
+
+
+def _progression_plain(steps: list[dict[str, Any]]) -> str | None:
+    """Plain-text progression (arrows included) for search and null handling."""
+
+    if not steps:
+        return None
+    parts = [(f"{step['year']} " if step["year"] is not None else "") + step["label"] for step in steps]
+    return " → ".join(parts)
+
+
+def _progression_html(steps: list[dict[str, Any]]) -> str:
+    if not steps:
+        return '<span class="missing">not found</span>'
+    parts: list[str] = []
+    prev: dict[str, Any] | None = None
+    for index, step in enumerate(steps):
+        if index and prev is not None:
+            direction = _progression_direction(prev, step)
+            glyph = _ARROW_GLYPH[direction]
+            parts.append(
+                f'<span class="prog-arrow {direction}" aria-hidden="true">{glyph}</span>'
+            )
+        year_html = (
+            f'<span class="prog-year">{step["year"]}</span>' if step["year"] is not None else ""
+        )
+        parts.append(
+            '<span class="prog-step">'
+            f'{year_html}<span class="prog-amt">{html.escape(step["label"])}</span></span>'
+        )
+        prev = step
+    return '<span class="prog">' + "".join(parts) + "</span>"
+
+
 def _round_sort_key(
     record: Mapping[str, Any], lookup: Mapping[str, Mapping[str, Any]]
 ) -> tuple[str, str, str, float, str]:
@@ -542,20 +663,102 @@ def _all_source_names(
     return list(unique.values())
 
 
-def _source_cell(parts: list[tuple[str, str | None]]) -> str:
-    if not parts:
+def _link_html(uri: str, label: str) -> str:
+    return (
+        f'<a href="{html.escape(uri, quote=True)}" target="_blank" '
+        f'rel="noopener noreferrer">{html.escape(label)}</a>'
+    )
+
+
+def _grid_columns(
+    records: list[dict[str, Any]], priority: Sequence[str] = ()
+) -> list[str]:
+    """Union of every key across ``records``, deterministically ordered.
+
+    Priority keys that actually occur are placed first (in the given order); all
+    remaining keys follow alphabetically.  This is what makes the grid show
+    *all possible parameters* rather than a hand-picked subset.
+    """
+
+    keys: set[str] = set()
+    for record in records:
+        keys.update(str(key) for key in record.keys())
+    ordered = [key for key in priority if key in keys]
+    ordered.extend(sorted(key for key in keys if key not in ordered))
+    return ordered
+
+
+def _grid_cell(value: Any) -> str:
+    """Render a single spreadsheet cell, linking any absolute HTTP(S) URLs."""
+
+    if not _present(value):
         return '<span class="missing">not found</span>'
-    rendered: list[str] = []
-    for label, uri in parts:
-        safe_label = html.escape(label, quote=True)
-        if uri:
-            rendered.append(
-                f'<a href="{html.escape(uri, quote=True)}" target="_blank" '
-                f'rel="noopener noreferrer">{safe_label}</a>'
-            )
-        else:
-            rendered.append(safe_label)
-    return ", ".join(rendered)
+
+    single = _safe_url(value)
+    if single:
+        return _link_html(single, urlsplit(single).netloc or single)
+
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        present = [item for item in value if _present(item)]
+        if present and all(_safe_url(item) for item in present):
+            links = [
+                _link_html(_safe_url(item) or "", urlsplit(_safe_url(item) or "").netloc)
+                for item in present
+            ]
+            return ", ".join(links)
+
+    return html.escape(_plain(value))
+
+
+def _grid_table(
+    records: list[dict[str, Any]],
+    sort_key,
+    *,
+    priority: Sequence[str] = (),
+    empty_label: str = "No records found.",
+    renderers: Mapping[str, Any] | None = None,
+) -> tuple[str, str, int]:
+    """Build a full-parameter spreadsheet grid.
+
+    Returns ``(header_html, body_html, column_count)``.  Every discovered field
+    becomes a column; the first column is rendered as a row header so it can be
+    frozen while the reader scrolls horizontally through the remaining columns.
+    """
+
+    renderers = renderers or {}
+    columns = _grid_columns(records, priority)
+    if not columns:
+        placeholder = '<tr class="empty-row"><td>' + html.escape(empty_label) + "</td></tr>"
+        return "<tr><th scope=\"col\">&nbsp;</th></tr>", placeholder, 1
+
+    header = "".join(
+        f'<th scope="col">{html.escape(column.replace("_", " "))}</th>' for column in columns
+    )
+
+    body: list[str] = []
+    for record in sorted(records, key=sort_key):
+        cells: list[str] = []
+        search_parts: list[str] = []
+        for index, column in enumerate(columns):
+            value = record.get(column)
+            plain = _plain(value)
+            if plain != _NOT_FOUND:
+                search_parts.append(plain.casefold())
+            renderer = renderers.get(column)
+            rendered = renderer(value, record) if renderer else _grid_cell(value)
+            if index == 0:
+                cells.append(f'<th scope="row">{rendered}</th>')
+            else:
+                cells.append(f"<td>{rendered}</td>")
+        blob = html.escape(" ".join(search_parts), quote=True)
+        body.append(f'<tr class="grid-row" data-search="{blob}">' + "".join(cells) + "</tr>")
+
+    if not body:
+        body.append(
+            f'<tr class="empty-row"><td colspan="{len(columns)}">'
+            f"{html.escape(empty_label)}</td></tr>"
+        )
+    return f"<tr>{header}</tr>", "".join(body), len(columns)
 
 
 def _summary_cards(company_count: int, round_count: int, source_count: int, error_count: int) -> str:
@@ -649,49 +852,8 @@ def _coverage_bars(rows: list[dict[str, Any]]) -> str:
     return "".join(rendered)
 
 
-def _rounds_table(
-    rounds: list[dict[str, Any]], lookup: Mapping[str, Mapping[str, Any]]
-) -> tuple[str, list[str]]:
-    ordered = sorted(rounds, key=lambda row: _round_sort_key(row, lookup))
-    table_sources: list[str] = []
-    body: list[str] = []
-
-    for record in ordered:
-        company_name, company = _round_company(record, lookup)
-        parts = _record_sources(record)
-        if not parts and company:
-            # Directory/accelerator is useful context when the event has no
-            # provider label, but it never becomes a link unless explicitly so.
-            accelerator = _first(company, "accelerator", "directory_source")
-            parts = _source_parts(accelerator)
-        source_names = [label for label, _ in parts]
-        table_sources.extend(source_names)
-        date_value, date_basis = _round_date(record)
-        stage = _humanize(_round_stage(record))
-        amount = _format_money(_round_amount(record))
-        verification = _humanize(_round_verification(record))
-        source_data = json.dumps([name.casefold() for name in source_names], ensure_ascii=False)
-        date_class = "missing" if not _present(date_value) else ""
-        body.append(
-            '<tr class="round-row" '
-            f'data-company="{html.escape(company_name, quote=True)}" '
-            f'data-sources="{html.escape(source_data, quote=True)}">'
-            f'<th scope="row">{html.escape(company_name)}</th>'
-            f'<td>{_source_cell(parts)}</td>'
-            f'<td>{html.escape(stage)}</td>'
-            f'<td><time class="{date_class}">{_esc(date_value)}</time></td>'
-            f'<td>{_esc(_humanize(date_basis))}</td>'
-            f'<td class="numeric">{html.escape(amount)}</td>'
-            f'<td>{html.escape(verification)}</td></tr>'
-        )
-
-    if not body:
-        body.append('<tr class="empty-row"><td colspan="7">No funding rounds found.</td></tr>')
-
-    unique_sources: dict[str, str] = {}
-    for name in sorted(table_sources, key=lambda item: (item.casefold(), item)):
-        unique_sources.setdefault(name.casefold(), name)
-    return "".join(body), list(unique_sources.values())
+def _company_grid_sort(record: Mapping[str, Any]):
+    return (_plain(_company_name(record)).casefold(), _stable_json(record))
 
 
 _CSS = r"""
@@ -724,6 +886,8 @@ _CSS = r"""
     --warn-soft: #4a3218;
     --missing: #aab3c0;
   }
+  .prog-arrow.up { color: #4ccb7f; }
+  .prog-arrow.down { color: #ff7a63; }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.45; }
@@ -766,7 +930,22 @@ tbody th { font-weight: 700; }
 tbody tr:last-child > * { border-bottom: 0; }
 tbody tr:hover { background: color-mix(in srgb, var(--brand-soft) 22%, transparent); }
 .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.grid-wrap { overflow: auto; max-height: 78vh; border: 1px solid var(--line); border-radius: 9px; }
+.grid-table { min-width: max-content; }
+.grid-table td, .grid-table th { max-width: 360px; overflow-wrap: anywhere; }
+.grid-table thead th { position: sticky; top: 0; z-index: 2; }
+.grid-table th[scope="row"] { position: sticky; left: 0; z-index: 1; background: var(--panel); box-shadow: 1px 0 0 var(--line); }
+.grid-table thead th:first-child { z-index: 3; background: var(--panel-soft); }
+.grid-table tbody tr:hover th[scope="row"] { background: color-mix(in srgb, var(--brand-soft) 22%, var(--panel)); }
 a { color: var(--brand); text-underline-offset: 2px; }
+.prog { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-variant-numeric: tabular-nums; }
+.prog-step { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.prog-year { color: var(--muted); font-size: .68rem; }
+.prog-amt { font-weight: 650; }
+.prog-arrow { font-weight: 800; font-size: .95rem; line-height: 1; }
+.prog-arrow.up { color: #157a41; }
+.prog-arrow.down { color: #b3341f; }
+.prog-arrow.flat { color: var(--muted); }
 .missing { color: var(--missing); }
 .empty, .note { color: var(--muted); font-size: .78rem; }
 .empty { margin: 0; padding: 8px 0; }
@@ -789,30 +968,31 @@ a { color: var(--brand); text-underline-offset: 2px; }
 
 _JS = r"""
 (() => {
-  const companyInput = document.getElementById("company-filter");
-  const sourceSelect = document.getElementById("source-filter");
-  const shown = document.getElementById("shown-count");
-  const rows = Array.from(document.querySelectorAll("tr.round-row"));
+  // Generic free-text filter shared by every spreadsheet grid on the page.
+  // A search box declares which grid it drives, which count element to update,
+  // and the singular/plural noun for that count.
+  const inputs = Array.from(document.querySelectorAll("input.grid-search"));
+  for (const input of inputs) {
+    const table = document.getElementById(input.dataset.target || "");
+    const count = document.getElementById(input.dataset.count || "");
+    const singular = input.dataset.singular || "row";
+    const plural = input.dataset.plural || singular + "s";
+    const rows = table ? Array.from(table.querySelectorAll("tr.grid-row")) : [];
 
-  function applyFilters() {
-    const companyQuery = (companyInput?.value || "").trim().toLocaleLowerCase();
-    const selectedSource = (sourceSelect?.value || "").toLocaleLowerCase();
-    let visible = 0;
-    for (const row of rows) {
-      const company = (row.dataset.company || "").toLocaleLowerCase();
-      let sources = [];
-      try { sources = JSON.parse(row.dataset.sources || "[]"); } catch (_) { sources = []; }
-      const companyMatch = !companyQuery || company.includes(companyQuery);
-      const sourceMatch = !selectedSource || sources.includes(selectedSource);
-      row.hidden = !(companyMatch && sourceMatch);
-      if (!row.hidden) visible += 1;
-    }
-    if (shown) shown.textContent = `${visible} round${visible === 1 ? "" : "s"} shown`;
+    const apply = () => {
+      const query = (input.value || "").trim().toLocaleLowerCase();
+      let visible = 0;
+      for (const row of rows) {
+        const blob = row.dataset.search || "";
+        row.hidden = query ? !blob.includes(query) : false;
+        if (!row.hidden) visible += 1;
+      }
+      if (count) count.textContent = `${visible} ${visible === 1 ? singular : plural} shown`;
+    };
+
+    input.addEventListener("input", apply);
+    apply();
   }
-
-  companyInput?.addEventListener("input", applyFilters);
-  sourceSelect?.addEventListener("change", applyFilters);
-  applyFilters();
 })();
 """
 
@@ -847,16 +1027,36 @@ def render_html(
     quality_rows = _quality_rows(quality_report, round_rows)
     source_names = _all_source_names(company_rows, round_rows, source_run_rows)
     error_count = _source_error_count(source_run_rows)
-    table_body, table_sources = _rounds_table(round_rows, lookup)
 
-    source_options = "".join(
-        f'<option value="{html.escape(name.casefold(), quote=True)}">{html.escape(name)}</option>'
-        for name in table_sources
-    )
     safe_title = html.escape(str(title) if _present(title) else _DEFAULT_TITLE, quote=True)
     metrics = _summary_cards(len(company_rows), len(round_rows), len(source_names), error_count)
     timeline = _timeline(round_rows)
     coverage = _coverage_bars(quality_rows)
+
+    # Per-company time series: link each company to its funding rounds and
+    # surface the round-over-round progression as a dedicated column.
+    progressions = _funding_progressions(round_rows)
+    for company in company_rows:
+        company["funding_progression"] = _progression_plain(_company_steps(company, progressions))
+
+    def _progression_renderer(_value: Any, record: Mapping[str, Any]) -> str:
+        return _progression_html(_company_steps(record, progressions))
+
+    company_head, company_body, company_cols = _grid_table(
+        company_rows,
+        _company_grid_sort,
+        priority=("name", "funding_progression", "startup_id", "domain", "website"),
+        empty_label="No companies found.",
+        renderers={"funding_progression": _progression_renderer},
+    )
+    rounds_head, rounds_body, rounds_cols = _grid_table(
+        round_rows,
+        lambda row: _round_sort_key(row, lookup),
+        priority=("company_name", "startup_id", "round_id", "date", "stage", "amount_usd"),
+        empty_label="No funding rounds found.",
+    )
+    company_count = len(company_rows)
+    round_count = len(round_rows)
 
     return (
         "<!doctype html>\n"
@@ -865,7 +1065,8 @@ def render_html(
         f"<title>{safe_title}</title>\n<style>{_CSS}</style>\n</head>\n<body>\n"
         '<main>\n<header>\n'
         f"<h1>{safe_title}</h1>\n"
-        '<p class="lede">A compact, evidence-aware view of discovered companies, funding events, and collection coverage.</p>\n'
+        '<p class="lede">A complete, evidence-aware view of every discovered company and funding event. '
+        "Each table is a spreadsheet-style grid showing every collected parameter; scroll horizontally to see all columns.</p>\n"
         f'<div class="metrics" aria-label="Scrape summary">{metrics}</div>\n'
         "</header>\n"
         '<div class="grid">\n'
@@ -875,21 +1076,32 @@ def render_html(
         '<section class="panel" aria-labelledby="coverage-heading">\n'
         '<h2 id="coverage-heading">Field coverage</h2>\n'
         f'<div class="coverage-list">{coverage}</div>\n</section>\n</div>\n'
-        '<section class="panel" aria-labelledby="rounds-heading">\n'
-        '<h2 id="rounds-heading">Funding rounds</h2>\n'
-        '<div class="filters" role="search" aria-label="Filter funding rounds">\n'
-        '<div class="control"><label for="company-filter">Company</label>'
-        '<input id="company-filter" type="search" placeholder="Filter by company" autocomplete="off" aria-controls="rounds-table"></div>\n'
-        '<div class="control"><label for="source-filter">Source</label>'
-        f'<select id="source-filter" aria-controls="rounds-table"><option value="">All sources</option>{source_options}</select></div>\n'
-        f'<div class="shown-count" id="shown-count" aria-live="polite">{len(round_rows)} round{"" if len(round_rows) == 1 else "s"} shown</div>\n'
+        '<section class="panel" aria-labelledby="companies-heading">\n'
+        f'<h2 id="companies-heading">Companies · all parameters ({company_cols} columns)</h2>\n'
+        '<div class="filters" role="search" aria-label="Filter companies">\n'
+        '<div class="control"><label for="company-list-filter">Search</label>'
+        '<input id="company-list-filter" class="grid-search" type="search" placeholder="Filter across every field" '
+        'autocomplete="off" aria-controls="companies-table" '
+        'data-target="companies-table" data-count="company-list-shown" data-singular="company" data-plural="companies"></div>\n'
+        f'<div class="shown-count" id="company-list-shown" aria-live="polite">{company_count} compan{"y" if company_count == 1 else "ies"} shown</div>\n'
         "</div>\n"
-        '<div class="table-wrap"><table id="rounds-table">\n'
-        '<caption class="sr-only">Funding rounds with company, evidence source, stage, date, amount, and verification status</caption>\n'
-        '<thead><tr><th scope="col">Company</th><th scope="col">Source</th><th scope="col">Stage</th>'
-        '<th scope="col">Funding date</th><th scope="col">Date basis</th><th scope="col">Amount</th>'
-        '<th scope="col">Verification</th></tr></thead>\n'
-        f"<tbody>{table_body}</tbody>\n</table></div>\n</section>\n"
+        '<div class="grid-wrap"><table id="companies-table" class="grid-table">\n'
+        '<caption class="sr-only">All scraped companies with every collected parameter as a column</caption>\n'
+        f"<thead>{company_head}</thead>\n"
+        f"<tbody>{company_body}</tbody>\n</table></div>\n</section>\n"
+        '<section class="panel" aria-labelledby="rounds-heading">\n'
+        f'<h2 id="rounds-heading">Funding rounds · all parameters ({rounds_cols} columns)</h2>\n'
+        '<div class="filters" role="search" aria-label="Filter funding rounds">\n'
+        '<div class="control"><label for="rounds-filter">Search</label>'
+        '<input id="rounds-filter" class="grid-search" type="search" placeholder="Filter across every field" '
+        'autocomplete="off" aria-controls="rounds-table" '
+        'data-target="rounds-table" data-count="rounds-shown" data-singular="round" data-plural="rounds"></div>\n'
+        f'<div class="shown-count" id="rounds-shown" aria-live="polite">{round_count} round{"" if round_count == 1 else "s"} shown</div>\n'
+        "</div>\n"
+        '<div class="grid-wrap"><table id="rounds-table" class="grid-table">\n'
+        '<caption class="sr-only">Funding rounds with every collected parameter as a column</caption>\n'
+        f"<thead>{rounds_head}</thead>\n"
+        f"<tbody>{rounds_body}</tbody>\n</table></div>\n</section>\n"
         f"</main>\n<script>{_JS}</script>\n</body>\n</html>\n"
     )
 

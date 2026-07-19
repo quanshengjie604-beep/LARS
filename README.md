@@ -32,16 +32,18 @@ python -m vcbrain mini --live --output-dir live_mini_output
 ```bash
 python -m vcbrain collect \
   --sources a16z,pear,yc,startx \
-  --yc-export /path/to/authorised-yc-export.json \
-  --sec-form-d /path/to/sec-quarterly-zips \
-  --limit 100 \
-  --mode both \
+  --limit 0 \
+  --mode training \
   --output-dir screening_handover
 ```
 
 Use `--limit 0` for every discovered company. `--concurrency` controls the bounded source/company
 worker pool. Pear remains paced at 10 seconds per request by default; its waits are asynchronous, so
 other source work continues.
+
+With `--sources yc` and no `--yc-export`, the pipeline auto-runs the bundled Algolia scraper to fetch
+the public YC directory (see the YC entry under [Source boundary](#source-boundary) for the bounding
+and opt-out flags).
 
 Optional credentials are read from the environment:
 
@@ -59,8 +61,12 @@ Optional credentials are read from the environment:
   the names-only investment list.
 - **Pear VC:** public WordPress REST portfolio plus taxonomy endpoints, with the declared crawl
   delay.
-- **YC:** local authorised JSON/CSV export only. The code does not automate YC's website or internal
-  Algolia service.
+- **YC:** an authorised local JSON/CSV export when supplied via `--yc-export`; otherwise the pipeline
+  auto-runs the bundled Algolia extractor (`yc-scraper/algolia_extractor.py`, overridable with
+  `--yc-scraper-path` or `$VCBRAIN_YC_SCRAPER`) to pull the public company directory. Cohort/batch
+  labels are retained as evidence, never as funding dates. Scraped batches are cached under the cache
+  directory so repeated runs do not re-query YC. Disable the auto-scrape with `--no-yc-scraper`, and
+  bound it with `--yc-recent N` or `--yc-batches "Winter 2024" "Summer 2024"`.
 - **StartX:** authenticated Consider Boards API only. Without a key it is reported as a structured
   skip rather than silently scraped.
 - **Hacker News:** Algolia discovery plus canonical Firebase item records.
