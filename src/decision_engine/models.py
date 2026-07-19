@@ -102,19 +102,16 @@ class ProbabilisticEstimator:
         else:
             if self.strict_backend:
                 raise RuntimeError("scikit-survival is required when strict_backend=true")
-            # Product-limit estimate: a distributionally valid baseline until the full backend is installed.
-            times, survival, at_risk = [], [], len(duration)
-            current = 1.0
-            for t in np.unique(duration):
-                deaths = int(np.sum((duration == t) & event))
-                censored = int(np.sum((duration == t) & ~event))
-                if deaths and at_risk:
-                    current *= 1.0 - deaths / at_risk
-                times.append(float(t)); survival.append(current)
-                at_risk -= deaths + censored
-            self.survival_times_ = np.asarray(times)
-            self.survival_probs_ = np.asarray(survival)
-            self.backend = "kaplan_meier_fallback"
+            # Feature-conditioned duration fallback for environments without sksurv.
+            # Censored rows receive lower weight; predictions parameterize an
+            # exponential (Weibull shape=1) survival curve per company.
+            self.pipeline = Pipeline([
+                ("prep", _preprocessor(X)),
+                ("model", HistGradientBoostingRegressor(random_state=self.random_state)),
+            ])
+            weights = np.where(event, 1.0, 0.35)
+            self.pipeline.fit(X, np.log(np.clip(duration, 1.0, None)), model__sample_weight=weights)
+            self.backend = "conditional_weibull_fallback"
         return self
 
     def predict_distribution(self, X: pd.DataFrame, quantiles: list[float], horizons: list[int]) -> list[dict[str, Any]]:
@@ -158,8 +155,7 @@ class ProbabilisticEstimator:
             functions = self.pipeline.predict_survival_function(X)
             curves = [{str(h): float(fn(h)) for h in horizons} for fn in functions]
         else:
-            def prob(h):
-                idx = np.searchsorted(self.survival_times_, h, side="right") - 1
-                return 1.0 if idx < 0 else float(self.survival_probs_[idx])
-            curves = [{str(h): prob(h) for h in horizons} for _ in range(len(X))]
+            scales = np.exp(np.asarray(self.pipeline.predict(X), dtype=float))
+            scales = np.clip(scales, 1.0, None)
+            curves = [{str(h): float(np.exp(-float(h) / scale)) for h in horizons} for scale in scales]
         return [{"distribution": "survival_curve", "parameters": {"survival_probability_by_day": curve}} for curve in curves]

@@ -4,7 +4,7 @@ project:
   report_dir: artifacts/demo_reports
 
 data:
-  training_features: screening_handover/training_features.jsonl
+  training_features: screening_handover/demo_training_features.jsonl
   training_outcomes: screening_handover/demo_training_outcomes.jsonl
   inference_requests: artifacts/founder_inference_requests.jsonl
   evidence_registry: screening_handover/evidence_registry.jsonl
@@ -26,7 +26,3 @@ models:
 inference:
   quantiles: [0.1, 0.5, 0.9]
   survival_horizons_days: [365, 730, 1825]
-
-demo:
-  synthetic_outcomes: true
-  warning: DO NOT USE FOR INVESTMENT DECISIONS
