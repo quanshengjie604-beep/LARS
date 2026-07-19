@@ -6,19 +6,19 @@
   },
   "coverage": [
     {
-      "coverage_rate": 0.0,
-      "evidence_supported_present": 0,
+      "coverage_rate": 0.003521,
+      "evidence_supported_present": 1,
       "field": "arr_usd",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
+      "missing": 283,
+      "present": 1,
+      "support_rate": 1.0,
       "unsupported_present": 0
     },
     {
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "burn_rate_usd_monthly",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -27,7 +27,7 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "cash_balance_usd",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -36,61 +36,61 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "churn_rate_annual",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
     },
     {
-      "coverage_rate": 0.0,
+      "coverage_rate": 0.355634,
       "evidence_supported_present": 0,
       "field": "competitor_density",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
-      "unsupported_present": 0
+      "missing": 183,
+      "present": 101,
+      "support_rate": 0.0,
+      "unsupported_present": 101
     },
     {
       "coverage_rate": 1.0,
       "evidence_supported_present": 0,
       "field": "current_stage",
       "missing": 0,
-      "present": 15,
+      "present": 284,
       "support_rate": 0.0,
-      "unsupported_present": 15
+      "unsupported_present": 284
     },
     {
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "customer_count",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
     },
     {
-      "coverage_rate": 0.066667,
+      "coverage_rate": 0.376761,
       "evidence_supported_present": 0,
       "field": "founder_axis",
-      "missing": 14,
-      "present": 1,
+      "missing": 177,
+      "present": 107,
       "support_rate": 0.0,
-      "unsupported_present": 1
+      "unsupported_present": 107
     },
     {
       "coverage_rate": 1.0,
       "evidence_supported_present": 0,
       "field": "founder_axis_trend",
       "missing": 0,
-      "present": 15,
+      "present": 284,
       "support_rate": 0.0,
-      "unsupported_present": 15
+      "unsupported_present": 284
     },
     {
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "founder_industry_experience_years",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -99,7 +99,7 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "founder_prior_exits",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -108,97 +108,97 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "founder_prior_startups",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
     },
     {
-      "coverage_rate": 0.066667,
+      "coverage_rate": 0.137324,
       "evidence_supported_present": 0,
       "field": "founder_score_persistent",
-      "missing": 14,
-      "present": 1,
+      "missing": 245,
+      "present": 39,
       "support_rate": 0.0,
-      "unsupported_present": 1
+      "unsupported_present": 39
     },
     {
-      "coverage_rate": 0.0,
+      "coverage_rate": 0.334507,
       "evidence_supported_present": 0,
       "field": "funding_climate_index",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
-      "unsupported_present": 0
+      "missing": 189,
+      "present": 95,
+      "support_rate": 0.0,
+      "unsupported_present": 95
     },
     {
-      "coverage_rate": 0.0,
+      "coverage_rate": 0.338028,
       "evidence_supported_present": 0,
       "field": "geography",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
-      "unsupported_present": 0
+      "missing": 188,
+      "present": 96,
+      "support_rate": 0.0,
+      "unsupported_present": 96
     },
     {
-      "coverage_rate": 0.066667,
+      "coverage_rate": 0.397887,
       "evidence_supported_present": 0,
       "field": "idea_vs_market",
-      "missing": 14,
-      "present": 1,
+      "missing": 171,
+      "present": 113,
       "support_rate": 0.0,
-      "unsupported_present": 1
+      "unsupported_present": 113
     },
     {
       "coverage_rate": 1.0,
       "evidence_supported_present": 0,
       "field": "idea_vs_market_trend",
       "missing": 0,
-      "present": 15,
+      "present": 284,
       "support_rate": 0.0,
-      "unsupported_present": 15
+      "unsupported_present": 284
     },
     {
-      "coverage_rate": 0.0,
+      "coverage_rate": 0.25,
       "evidence_supported_present": 0,
       "field": "last_round_date",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
-      "unsupported_present": 0
+      "missing": 213,
+      "present": 71,
+      "support_rate": 0.0,
+      "unsupported_present": 71
     },
     {
-      "coverage_rate": 0.0,
+      "coverage_rate": 0.197183,
       "evidence_supported_present": 0,
       "field": "last_round_size_usd",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
-      "unsupported_present": 0
+      "missing": 228,
+      "present": 56,
+      "support_rate": 0.0,
+      "unsupported_present": 56
     },
     {
       "coverage_rate": 1.0,
       "evidence_supported_present": 0,
       "field": "market_axis",
       "missing": 0,
-      "present": 15,
+      "present": 284,
       "support_rate": 0.0,
-      "unsupported_present": 15
+      "unsupported_present": 284
     },
     {
       "coverage_rate": 1.0,
       "evidence_supported_present": 0,
       "field": "market_axis_trend",
       "missing": 0,
-      "present": 15,
+      "present": 284,
       "support_rate": 0.0,
-      "unsupported_present": 15
+      "unsupported_present": 284
     },
     {
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "network_centrality",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -207,7 +207,7 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "open_source_activity_score",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -216,7 +216,7 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "patent_count",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -225,25 +225,25 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "proprietary_score",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
     },
     {
-      "coverage_rate": 0.066667,
+      "coverage_rate": 0.137324,
       "evidence_supported_present": 0,
       "field": "public_footprint_score",
-      "missing": 14,
-      "present": 1,
+      "missing": 245,
+      "present": 39,
       "support_rate": 0.0,
-      "unsupported_present": 1
+      "unsupported_present": 39
     },
     {
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "revenue_growth_rate_yoy",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -252,25 +252,25 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "runway_months",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
     },
     {
-      "coverage_rate": 0.0,
+      "coverage_rate": 0.355634,
       "evidence_supported_present": 0,
       "field": "sector",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
-      "unsupported_present": 0
+      "missing": 183,
+      "present": 101,
+      "support_rate": 0.0,
+      "unsupported_present": 101
     },
     {
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "single_founder_flag",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -279,7 +279,7 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "soft_skill_estimate",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
@@ -288,123 +288,49 @@
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "tam_usd",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
     },
     {
-      "coverage_rate": 0.0,
+      "coverage_rate": 0.330986,
       "evidence_supported_present": 0,
       "field": "team_size",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
-      "unsupported_present": 0
+      "missing": 190,
+      "present": 94,
+      "support_rate": 0.0,
+      "unsupported_present": 94
     },
     {
       "coverage_rate": 0.0,
       "evidence_supported_present": 0,
       "field": "technical_founder_flag",
-      "missing": 15,
+      "missing": 284,
       "present": 0,
       "support_rate": null,
       "unsupported_present": 0
     },
     {
-      "coverage_rate": 0.0,
+      "coverage_rate": 0.147887,
       "evidence_supported_present": 0,
       "field": "total_funding_to_date_usd",
-      "missing": 15,
-      "present": 0,
-      "support_rate": null,
-      "unsupported_present": 0
+      "missing": 242,
+      "present": 42,
+      "support_rate": 0.0,
+      "unsupported_present": 42
     }
   ],
   "hard_to_obtain": [
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.066667,
-      "difficulty_score": 0.703333,
-      "field": "founder_axis",
-      "missing": 14,
-      "observed_missing_reason_codes": [],
-      "rank": 1,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 1
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.066667,
-      "difficulty_score": 0.703333,
-      "field": "founder_score_persistent",
-      "missing": 14,
-      "observed_missing_reason_codes": [],
-      "rank": 2,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 1
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.066667,
-      "difficulty_score": 0.703333,
-      "field": "idea_vs_market",
-      "missing": 14,
-      "observed_missing_reason_codes": [],
-      "rank": 3,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 1
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.066667,
-      "difficulty_score": 0.703333,
-      "field": "public_footprint_score",
-      "missing": 14,
-      "observed_missing_reason_codes": [],
-      "rank": 4,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 1
-    },
-    {
-      "action_code": "request_founder_financials",
-      "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
-      "field": "arr_usd",
-      "missing": 15,
-      "observed_missing_reason_codes": [],
-      "rank": 5,
-      "reason_code": "private_financial_disclosure",
-      "source_targets": [
-        "company_website",
-        "press_release",
-        "founder_documents"
-      ],
-      "stale_rate": 0.0,
-      "unsupported_present": 0
-    },
     {
       "action_code": "request_founder_financials",
       "contradictions": 0,
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "burn_rate_usd_monthly",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 6,
+      "rank": 1,
       "reason_code": "private_financial_disclosure",
       "source_targets": [
         "financial_statement",
@@ -419,9 +345,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "cash_balance_usd",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 7,
+      "rank": 2,
       "reason_code": "private_financial_disclosure",
       "source_targets": [
         "financial_statement",
@@ -437,23 +363,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "churn_rate_annual",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 8,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 0
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
-      "field": "competitor_density",
-      "missing": 15,
-      "observed_missing_reason_codes": [],
-      "rank": 9,
+      "rank": 3,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -465,9 +377,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "customer_count",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 10,
+      "rank": 4,
       "reason_code": "sparse_public_disclosure",
       "source_targets": [
         "company_website",
@@ -483,9 +395,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "founder_industry_experience_years",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 11,
+      "rank": 5,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -497,9 +409,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "founder_prior_exits",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 12,
+      "rank": 6,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -511,65 +423,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "founder_prior_startups",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 13,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 0
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
-      "field": "funding_climate_index",
-      "missing": 15,
-      "observed_missing_reason_codes": [],
-      "rank": 14,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 0
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
-      "field": "geography",
-      "missing": 15,
-      "observed_missing_reason_codes": [],
-      "rank": 15,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 0
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
-      "field": "last_round_date",
-      "missing": 15,
-      "observed_missing_reason_codes": [],
-      "rank": 16,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 0
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
-      "field": "last_round_size_usd",
-      "missing": 15,
-      "observed_missing_reason_codes": [],
-      "rank": 17,
+      "rank": 7,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -581,9 +437,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "network_centrality",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 18,
+      "rank": 8,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -595,9 +451,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "open_source_activity_score",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 19,
+      "rank": 9,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -609,9 +465,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "patent_count",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 20,
+      "rank": 10,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -623,9 +479,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "proprietary_score",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 21,
+      "rank": 11,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -637,9 +493,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "revenue_growth_rate_yoy",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 22,
+      "rank": 12,
       "reason_code": "sparse_public_disclosure",
       "source_targets": [
         "company_website",
@@ -655,9 +511,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "runway_months",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 23,
+      "rank": 13,
       "reason_code": "private_financial_disclosure",
       "source_targets": [
         "financial_statement",
@@ -672,24 +528,10 @@
       "contradictions": 0,
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
-      "field": "sector",
-      "missing": 15,
-      "observed_missing_reason_codes": [],
-      "rank": 24,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 0
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
       "field": "single_founder_flag",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 25,
+      "rank": 14,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -701,9 +543,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "soft_skill_estimate",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 26,
+      "rank": 15,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -715,23 +557,9 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "tam_usd",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 27,
-      "reason_code": "low_coverage",
-      "source_targets": [],
-      "stale_rate": 0.0,
-      "unsupported_present": 0
-    },
-    {
-      "action_code": "enrich_from_additional_sources",
-      "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
-      "field": "team_size",
-      "missing": 15,
-      "observed_missing_reason_codes": [],
-      "rank": 28,
+      "rank": 16,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
@@ -743,34 +571,206 @@
       "coverage_rate": 0.0,
       "difficulty_score": 0.7,
       "field": "technical_founder_flag",
-      "missing": 15,
+      "missing": 284,
       "observed_missing_reason_codes": [],
-      "rank": 29,
+      "rank": 17,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
       "unsupported_present": 0
     },
     {
+      "action_code": "request_founder_financials",
+      "contradictions": 0,
+      "coverage_rate": 0.003521,
+      "difficulty_score": 0.697535,
+      "field": "arr_usd",
+      "missing": 283,
+      "observed_missing_reason_codes": [],
+      "rank": 18,
+      "reason_code": "private_financial_disclosure",
+      "source_targets": [
+        "company_website",
+        "press_release",
+        "founder_documents"
+      ],
+      "stale_rate": 0.0,
+      "unsupported_present": 0
+    },
+    {
       "action_code": "enrich_from_additional_sources",
       "contradictions": 0,
-      "coverage_rate": 0.0,
-      "difficulty_score": 0.7,
+      "coverage_rate": 0.137324,
+      "difficulty_score": 0.653873,
+      "field": "founder_score_persistent",
+      "missing": 245,
+      "observed_missing_reason_codes": [],
+      "rank": 19,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 39
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.137324,
+      "difficulty_score": 0.653873,
+      "field": "public_footprint_score",
+      "missing": 245,
+      "observed_missing_reason_codes": [],
+      "rank": 20,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 39
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.147887,
+      "difficulty_score": 0.646479,
       "field": "total_funding_to_date_usd",
-      "missing": 15,
+      "missing": 242,
+      "observed_missing_reason_codes": [],
+      "rank": 21,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 42
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.197183,
+      "difficulty_score": 0.611972,
+      "field": "last_round_size_usd",
+      "missing": 228,
+      "observed_missing_reason_codes": [],
+      "rank": 22,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 56
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.25,
+      "difficulty_score": 0.575,
+      "field": "last_round_date",
+      "missing": 213,
+      "observed_missing_reason_codes": [],
+      "rank": 23,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 71
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.330986,
+      "difficulty_score": 0.51831,
+      "field": "team_size",
+      "missing": 190,
+      "observed_missing_reason_codes": [],
+      "rank": 24,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 94
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.334507,
+      "difficulty_score": 0.515845,
+      "field": "funding_climate_index",
+      "missing": 189,
+      "observed_missing_reason_codes": [],
+      "rank": 25,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 95
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.338028,
+      "difficulty_score": 0.51338,
+      "field": "geography",
+      "missing": 188,
+      "observed_missing_reason_codes": [],
+      "rank": 26,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 96
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.355634,
+      "difficulty_score": 0.501056,
+      "field": "competitor_density",
+      "missing": 183,
+      "observed_missing_reason_codes": [],
+      "rank": 27,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 101
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.355634,
+      "difficulty_score": 0.501056,
+      "field": "sector",
+      "missing": 183,
+      "observed_missing_reason_codes": [],
+      "rank": 28,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 101
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.376761,
+      "difficulty_score": 0.486268,
+      "field": "founder_axis",
+      "missing": 177,
+      "observed_missing_reason_codes": [],
+      "rank": 29,
+      "reason_code": "low_coverage",
+      "source_targets": [],
+      "stale_rate": 0.0,
+      "unsupported_present": 107
+    },
+    {
+      "action_code": "enrich_from_additional_sources",
+      "contradictions": 0,
+      "coverage_rate": 0.397887,
+      "difficulty_score": 0.471479,
+      "field": "idea_vs_market",
+      "missing": 171,
       "observed_missing_reason_codes": [],
       "rank": 30,
       "reason_code": "low_coverage",
       "source_targets": [],
       "stale_rate": 0.0,
-      "unsupported_present": 0
+      "unsupported_present": 113
     }
   ],
   "parameters": {
     "hard_coverage_threshold": 0.6,
     "stale_after_days": 365
   },
-  "record_count": 15,
+  "record_count": 284,
   "source_health": [
     {
       "attempted": 1,
@@ -796,7 +796,7 @@
       "disclosure_yield_per_request": null,
       "disclosure_yield_per_success": null,
       "error_codes": [],
-      "evidence_items": 11,
+      "evidence_items": 486,
       "failed": 0,
       "financial_disclosures": 0,
       "latency_ms_median": null,
@@ -814,9 +814,9 @@
       "disclosure_yield_per_request": null,
       "disclosure_yield_per_success": null,
       "error_codes": [],
-      "evidence_items": 9,
+      "evidence_items": 93,
       "failed": 0,
-      "financial_disclosures": 0,
+      "financial_disclosures": 5,
       "latency_ms_median": null,
       "latency_ms_p95": null,
       "records_reported": 0,
@@ -855,13 +855,13 @@
       "disclosure_yield_per_request": 0.0,
       "disclosure_yield_per_success": 0.0,
       "error_codes": [],
-      "evidence_items": 9,
+      "evidence_items": 75,
       "failed": 0,
       "financial_disclosures": 0,
       "latency_ms_median": null,
       "latency_ms_p95": null,
-      "records_reported": 9,
-      "requests": 10,
+      "records_reported": 75,
+      "requests": 100,
       "source": "hackernews",
       "status": "healthy",
       "succeeded": 1,
@@ -873,7 +873,7 @@
       "disclosure_yield_per_request": null,
       "disclosure_yield_per_success": null,
       "error_codes": [],
-      "evidence_items": 15,
+      "evidence_items": 184,
       "failed": 0,
       "financial_disclosures": 0,
       "latency_ms_median": null,
@@ -881,6 +881,24 @@
       "records_reported": 0,
       "requests": 0,
       "source": "llm_web_search_funding",
+      "status": "observed_only",
+      "succeeded": 0,
+      "success_rate": null
+    },
+    {
+      "attempted": 0,
+      "cache_hits": 0,
+      "disclosure_yield_per_request": null,
+      "disclosure_yield_per_success": null,
+      "error_codes": [],
+      "evidence_items": 1,
+      "failed": 0,
+      "financial_disclosures": 0,
+      "latency_ms_median": null,
+      "latency_ms_p95": null,
+      "records_reported": 0,
+      "requests": 0,
+      "source": "openai_web_search",
       "status": "observed_only",
       "succeeded": 0,
       "success_rate": null
@@ -902,6 +920,24 @@
       "status": "healthy_no_yield",
       "succeeded": 1,
       "success_rate": 1.0
+    },
+    {
+      "attempted": 0,
+      "cache_hits": 0,
+      "disclosure_yield_per_request": null,
+      "disclosure_yield_per_success": null,
+      "error_codes": [],
+      "evidence_items": 5,
+      "failed": 0,
+      "financial_disclosures": 0,
+      "latency_ms_median": null,
+      "latency_ms_p95": null,
+      "records_reported": 0,
+      "requests": 0,
+      "source": "pear_wp_rest",
+      "status": "observed_only",
+      "succeeded": 0,
+      "success_rate": null
     },
     {
       "attempted": 1,
@@ -996,7 +1032,7 @@
       "disclosure_yield_per_request": null,
       "disclosure_yield_per_success": null,
       "error_codes": [],
-      "evidence_items": 10,
+      "evidence_items": 96,
       "failed": 0,
       "financial_disclosures": 0,
       "latency_ms_median": null,
@@ -1011,14 +1047,14 @@
   ],
   "staleness": [
     {
-      "age_days_median": null,
-      "age_days_p95": null,
+      "age_days_median": 0,
+      "age_days_p95": 0.0,
       "field": "arr_usd",
-      "fresh": 0,
+      "fresh": 1,
       "stale": 0,
       "stale_after_days": 365,
-      "stale_rate": null,
-      "supported_values": 0,
+      "stale_rate": 0.0,
+      "supported_values": 1,
       "unknown_source_date": 0
     },
     {
@@ -1063,7 +1099,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 0
+      "unknown_source_date": 101
     },
     {
       "age_days_median": null,
@@ -1074,7 +1110,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 15
+      "unknown_source_date": 284
     },
     {
       "age_days_median": null,
@@ -1096,7 +1132,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 1
+      "unknown_source_date": 107
     },
     {
       "age_days_median": null,
@@ -1107,7 +1143,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 15
+      "unknown_source_date": 284
     },
     {
       "age_days_median": null,
@@ -1151,7 +1187,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 1
+      "unknown_source_date": 39
     },
     {
       "age_days_median": null,
@@ -1162,7 +1198,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 0
+      "unknown_source_date": 95
     },
     {
       "age_days_median": null,
@@ -1173,7 +1209,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 0
+      "unknown_source_date": 96
     },
     {
       "age_days_median": null,
@@ -1184,7 +1220,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 1
+      "unknown_source_date": 113
     },
     {
       "age_days_median": null,
@@ -1195,7 +1231,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 15
+      "unknown_source_date": 284
     },
     {
       "age_days_median": null,
@@ -1206,7 +1242,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 0
+      "unknown_source_date": 71
     },
     {
       "age_days_median": null,
@@ -1217,7 +1253,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 0
+      "unknown_source_date": 56
     },
     {
       "age_days_median": null,
@@ -1228,7 +1264,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 15
+      "unknown_source_date": 284
     },
     {
       "age_days_median": null,
@@ -1239,7 +1275,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 15
+      "unknown_source_date": 284
     },
     {
       "age_days_median": null,
@@ -1294,7 +1330,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 1
+      "unknown_source_date": 39
     },
     {
       "age_days_median": null,
@@ -1327,7 +1363,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 0
+      "unknown_source_date": 101
     },
     {
       "age_days_median": null,
@@ -1371,7 +1407,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 0
+      "unknown_source_date": 94
     },
     {
       "age_days_median": null,
@@ -1393,7 +1429,7 @@
       "stale_after_days": 365,
       "stale_rate": null,
       "supported_values": 0,
-      "unknown_source_date": 0
+      "unknown_source_date": 42
     }
   ]
 }

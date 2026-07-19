@@ -1,13 +1,13 @@
 {
   "as_of": "2026-07-19",
-  "collected_at": "2026-07-19T08:43:07Z",
+  "collected_at": "2026-07-19T09:16:46Z",
   "companies_discovered": 6168,
-  "companies_processed": 10,
-  "enrichment_tasks": 446,
-  "evidence_records": 54,
-  "financial_disclosures": 0,
-  "funding_rounds": 15,
-  "inference_requests": 0,
+  "companies_processed": 100,
+  "enrichment_tasks": 7565,
+  "evidence_records": 940,
+  "financial_disclosures": 5,
+  "funding_rounds": 184,
+  "inference_requests": 100,
   "source_status": {
     "a16z": "ok",
     "github": "skipped",
@@ -18,6 +18,6 @@
     "startx": "skipped",
     "yc": "ok"
   },
-  "training_features": 15,
-  "training_outcomes": 15
+  "training_features": 184,
+  "training_outcomes": 184
 }
