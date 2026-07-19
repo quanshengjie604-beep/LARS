@@ -5,3 +5,6 @@
 .idea/
 __pyc*
 *.pdf
+# Secrets: ignore everything in /secrets except the tracked example.
+/secrets/*
+!/secrets/*.example
