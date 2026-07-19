@@ -33,6 +33,7 @@ from fastapi.staticfiles import StaticFiles
 
 from Run_MC import run_singular_profile_analysis
 from intake import read_profile_submission
+from enrich import EnrichmentError, enrich_profile_from_name
 
 # --------------------------------------------------------------------------
 # Paths & app setup
@@ -122,6 +123,61 @@ async def profile(
             content={"status": "error", "detail": f"Read-in failed: {exc}"},
         )
 
+    return JSONResponse(content={"status": "ok", **result})
+
+
+@app.post("/api/enrich")
+async def enrich(
+    name: str = Form(""),
+    first_name: str = Form(""),
+    last_name: str = Form(""),
+    company_name: str = Form(""),
+    linkedin: str = Form(""),
+    website: str = Form(""),
+) -> JSONResponse:
+    """Research a founder from just their name and return an NGBoost request.
+
+    Only ``name`` (or ``first_name``/``last_name``) is required; the other
+    fields are optional hints that focus the web search. Returns::
+
+        {"status": "ok",
+         "inference_request": {...},   # schema-clean, ready for NGBoost
+         "citations": [{"url", "title"}, ...],
+         "model": "..."}
+
+    The OpenAI call is blocking (network + tool use), so it runs in a worker
+    thread to keep the event loop responsive.
+    """
+    full_name = name.strip() or f"{first_name} {last_name}".strip()
+    if not full_name:
+        return JSONResponse(
+            status_code=400,
+            content={"status": "error", "detail": "A name is required."},
+        )
+
+    hints = {
+        "Company": company_name,
+        "LinkedIn": linkedin,
+        "Website": website,
+    }
+
+    try:
+        result = await run_in_threadpool(
+            enrich_profile_from_name, full_name, hints
+        )
+    except EnrichmentError as exc:
+        return JSONResponse(
+            status_code=502,
+            content={"status": "error", "detail": str(exc)},
+        )
+    except Exception as exc:  # noqa: BLE001 - surface any unexpected error to the UI
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": f"Enrichment failed: {exc}"},
+        )
+
+    # Drop the (long) raw model text from the API payload; keep it server-side.
+    result.pop("raw_text", None)
     return JSONResponse(content={"status": "ok", **result})
 
 

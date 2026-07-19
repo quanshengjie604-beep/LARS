@@ -207,6 +207,41 @@
     }
     #profile-status { color: var(--muted); font-size: .88rem; }
     #profile-status.ok { color: var(--ok); }
+    #enrich-status { color: var(--muted); font-size: .88rem; }
+    #enrich-status.ok { color: var(--ok); }
+    #enrich-status.err { color: var(--err); }
+
+    /* Auto-fill result */
+    .enrich-result { display: none; }
+    .enrich-result.visible { display: block; }
+    .json-out {
+      background: #0f172a;
+      color: #e2e8f0;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: .8rem;
+      line-height: 1.5;
+      max-height: 380px;
+      overflow: auto;
+      white-space: pre;
+      margin: .4rem 0 1rem;
+    }
+    .sources { margin-bottom: 1rem; }
+    .sources .sources-title {
+      font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--muted); margin-bottom: .5rem;
+    }
+    .sources a {
+      display: block;
+      color: var(--accent-strong);
+      font-size: .82rem;
+      text-decoration: none;
+      padding: .15rem 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sources a:hover { text-decoration: underline; }
 
     /* Dashboard */
     #dashboard { display: none; margin-top: 1.75rem; }
@@ -296,7 +331,51 @@
       </section>
     </div>
 
-    <!-- ============ Section 2: Questionnaire ============ -->
+    <!-- ============ Section 2: Auto-fill from a name ============ -->
+    <div class="card">
+      <h2>Auto-fill from a name</h2>
+      <p class="section-sub">
+        Don't want to fill in the whole questionnaire? Enter a founder's name and
+        we'll search the web (via the OpenAI API) and build an NGBoost-ready
+        profile automatically.
+      </p>
+
+      <form id="enrich-form">
+        <div class="form-grid">
+          <div class="field full">
+            <label for="enrich_name">Founder name</label>
+            <input type="text" id="enrich_name" name="name" placeholder="e.g. Patrick Collison" autocomplete="name" />
+          </div>
+          <div class="field">
+            <label for="enrich_company">Company (optional hint)</label>
+            <input type="text" id="enrich_company" name="company_name" placeholder="e.g. Stripe" />
+          </div>
+          <div class="field">
+            <label for="enrich_linkedin">LinkedIn (optional hint)</label>
+            <input type="url" id="enrich_linkedin" name="linkedin" placeholder="https://linkedin.com/in/…" />
+          </div>
+        </div>
+
+        <div class="submit-row">
+          <button type="submit" id="enrich-btn">Search the web &amp; build profile</button>
+          <span id="enrich-status"></span>
+        </div>
+      </form>
+
+      <section id="enrich-result" class="enrich-result">
+        <p class="section-sub" style="margin-top:1.4rem;">
+          Generated NGBoost inference request:
+        </p>
+        <pre id="enrich-json" class="json-out"></pre>
+        <div id="enrich-sources" class="sources"></div>
+        <div class="submit-row">
+          <button type="button" id="enrich-use-btn">Use this &amp; run analysis</button>
+          <span class="run-note">Fills the questionnaire below with what we found.</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ Section 3: Questionnaire ============ -->
     <div class="card">
       <h2>Founder &amp; company questionnaire</h2>
       <p class="section-sub">
@@ -374,6 +453,7 @@
 
     const ANALYZE_URL = "/api/analyze";
     const PROFILE_URL = "/api/profile";
+    const ENRICH_URL = "/api/enrich";
 
     // -------- Section 1: run the Monte Carlo analysis ---------------------
     // Shared so both the "Run analysis" button and the questionnaire's
@@ -402,7 +482,120 @@
 
     runBtn.addEventListener("click", () => { runAnalysis().catch(() => {}); });
 
-    // -------- Section 2: read in the questionnaire, then run --------------
+    // -------- Section 2: auto-fill from a name (OpenAI web search) --------
+    const enrichForm = document.getElementById("enrich-form");
+    const enrichBtn = document.getElementById("enrich-btn");
+    const enrichStatus = document.getElementById("enrich-status");
+    const enrichResult = document.getElementById("enrich-result");
+    const enrichJson = document.getElementById("enrich-json");
+    const enrichSources = document.getElementById("enrich-sources");
+    const enrichUseBtn = document.getElementById("enrich-use-btn");
+
+    // Holds the most recent inference request so "Use this" can apply it.
+    let lastInferenceRequest = null;
+
+    enrichForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const name = document.getElementById("enrich_name").value.trim();
+      if (!name) {
+        setEnrichStatus("Please enter a name first.", "err");
+        return;
+      }
+
+      errorBox.classList.remove("visible");
+      enrichResult.classList.remove("visible");
+      enrichBtn.disabled = true;
+      enrichBtn.innerHTML = '<span class="spinner"></span>Searching the web…';
+      setEnrichStatus("Researching — this can take 10–30 seconds…", "");
+
+      try {
+        const formData = new FormData(enrichForm);
+        const response = await fetch(ENRICH_URL, { method: "POST", body: formData });
+        const data = await response.json();
+        if (!response.ok || data.status === "error") {
+          throw new Error(data.detail || "Enrichment failed.");
+        }
+
+        lastInferenceRequest = data.inference_request;
+        renderEnrichResult(data);
+        const found = countKnownFields(data.inference_request);
+        setEnrichStatus(`Done — found ${found} field(s) from the web.`, "ok");
+      } catch (err) {
+        setEnrichStatus(err.message, "err");
+        lastInferenceRequest = null;
+      } finally {
+        enrichBtn.disabled = false;
+        enrichBtn.textContent = "Search the web & build profile";
+      }
+    });
+
+    // "Use this & run analysis": copy findings into the questionnaire, then run.
+    enrichUseBtn.addEventListener("click", async () => {
+      if (lastInferenceRequest) applyInferenceToForm(lastInferenceRequest);
+      await runAnalysis().catch(() => {});
+    });
+
+    function renderEnrichResult(data) {
+      enrichJson.textContent = JSON.stringify(data.inference_request, null, 2);
+
+      const cites = data.citations || [];
+      if (cites.length) {
+        enrichSources.innerHTML =
+          '<div class="sources-title">Sources</div>' +
+          cites.map(c => {
+            const label = c.title || c.url;
+            return `<a href="${c.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+          }).join("");
+      } else {
+        enrichSources.innerHTML =
+          '<div class="sources-title">Sources</div>' +
+          '<span class="run-note">No sources were returned.</span>';
+      }
+      enrichResult.classList.add("visible");
+    }
+
+    // Copy the (flat) known values into the questionnaire fields we display.
+    function applyInferenceToForm(req) {
+      const name = document.getElementById("enrich_name").value.trim();
+      const parts = name.split(/\s+/);
+      if (parts.length) {
+        document.getElementById("first_name").value = parts[0] || "";
+        document.getElementById("last_name").value = parts.slice(1).join(" ");
+      }
+      const company = document.getElementById("enrich_company").value.trim();
+      if (company) document.getElementById("company_name").value = company;
+      const linkedin = document.getElementById("enrich_linkedin").value.trim();
+      if (linkedin) document.getElementById("linkedin").value = linkedin;
+
+      const sector = req && req.market && req.market.sector;
+      if (sector) document.getElementById("company_sector").value = sector;
+    }
+
+    function countKnownFields(req) {
+      if (!req) return 0;
+      const groups = ["screening", "traction", "financials", "team", "market", "cold_start"];
+      let n = 0;
+      for (const g of groups) {
+        const obj = req[g] || {};
+        for (const k of Object.keys(obj)) if (obj[k] !== null && obj[k] !== undefined) n++;
+      }
+      return n;
+    }
+
+    function setEnrichStatus(text, kind) {
+      enrichStatus.textContent = text;
+      enrichStatus.classList.remove("ok", "err");
+      if (kind) enrichStatus.classList.add(kind);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+      ));
+    }
+
+    // -------- Section 3: read in the questionnaire, then run --------------
     profileForm.addEventListener("submit", async (event) => {
       // 1. Prevent the default full-page submit.
       event.preventDefault();
