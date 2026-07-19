@@ -6,3 +6,4 @@
 __pyc*
 *.pdf
 .env.supabase
+secrets/
