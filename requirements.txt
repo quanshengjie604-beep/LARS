@@ -2,3 +2,6 @@ numpy
 pandas
 matplotlib
 pytest
+fastapi
+uvicorn[standard]
+python-multipart
