@@ -1,6 +1,6 @@
 """Handover contracts for the Monte Carlo layer.
 
-These mirror the pipeline spec (Information/vc-brain-mc-pipeline.md):
+These mirror the pipeline spec (docs/architecture/vc-brain-mc-pipeline.md):
 
     H2  DistributionParams   Evaluation -> Simulation   (the theta the six
                                                           NGBoost-style models emit)

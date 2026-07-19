@@ -1,7 +1,7 @@
 # Data Acquisition & Scoring Plan for the NGBoost Decision Engine
 
-Scope: source the fields in `ngboost_data_requirements.md` from the public web, and
-define the scoring formulas that `vc-brain-mc-pipeline.md` leaves unspecified (the three
+Scope: source the fields in [`ngboost-data-requirements.md`](../requirements/ngboost-data-requirements.md) from the public web, and
+define the scoring formulas that [`vc-brain-mc-pipeline.md`](../architecture/vc-brain-mc-pipeline.md) leaves unspecified (the three
 screening axes, their trends, and the derived 0–1 signals).
 
 ---

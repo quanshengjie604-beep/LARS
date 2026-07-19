@@ -158,7 +158,7 @@ model, so dropping them degrades the signal that matters most. Collect or estima
 
 Everything else in 2.1–2.6 is both consumed and cheaply sourced — keep as-is.
 
-**Naming.** Field names follow the collection contract in `ngboost_data_requirements.md`
+**Naming.** Field names follow the collection contract in [`ngboost-data-requirements.md`](../requirements/ngboost-data-requirements.md)
 (`_usd` / `_yoy` / `_annual` / `_monthly` suffixes) so the producer and consumer schemas join 1:1.
 
 **Superset.** That doc also collects a few fields not listed here — `last_round_date`,

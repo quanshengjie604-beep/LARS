@@ -1,8 +1,8 @@
 # vcbrain — Screening data pipeline (list-scale)
 
-Implements [`plan.md`](plan.md) over a **list of startups**, in parallel, and
+Implements [`public-data-sourcing.md`](docs/plans/public-data-sourcing.md) over a **list of startups**, in parallel, and
 emits the `screening_handover/` JSONL contract from
-[`ngboost_data_requirements.md`](ngboost_data_requirements.md).
+[`ngboost-data-requirements.md`](docs/requirements/ngboost-data-requirements.md).
 
 Instead of collecting one company at a time, it **seeds the whole cohort from an
 accelerator directory** (Y Combinator, first-class), **caps every company to

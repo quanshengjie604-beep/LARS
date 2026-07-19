@@ -1,6 +1,6 @@
 # Startup Probability Decision Engine
 
-本项目实现 `Data_requirements.md` 中 NGBoost 团队负责的部分：接收 Screening 团队交付的 JSONL，完成校验、展平、编码、M1–M6 训练，并向 Monte Carlo 模块输出统一概率分布。
+本项目实现 [`data-requirements.md`](../requirements/data-requirements.md) 中 NGBoost 团队负责的部分：接收 Screening 团队交付的 JSONL，完成校验、展平、编码、M1–M6 训练，并向 Monte Carlo 模块输出统一概率分布。
 
 ## Pipeline 与分工
 

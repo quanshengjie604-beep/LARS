@@ -10,7 +10,7 @@ The output directory contains:
 - `evidence_registry.jsonl`: one evidence item per line, joined by `candidate_id` and `source_id`.
 - `crawl_runs.jsonl`: run metadata, source counts, and non-fatal source errors.
 
-All founder feature keys named in `Data_requirements.md` are present. Values that cannot be established as public facts remain `null` and their full paths are included in `missing_fields`. The crawler never converts missing information to zero and never calculates speculative scores.
+All founder feature keys named in [`data-requirements.md`](../../docs/requirements/data-requirements.md) are present. Values that cannot be established as public facts remain `null` and their full paths are included in `missing_fields`. The crawler never converts missing information to zero and never calculates speculative scores.
 
 ## Setup
 

@@ -2,7 +2,7 @@
 
 Everything the pipeline needs to run is derived here so the rest of the code
 stays free of magic numbers. Values map directly to the specifications in
-`plan.md` (§5 formula constants) and `ngboost_data_requirements.md`.
+`docs/plans/public-data-sourcing.md` (§5 formula constants) and `docs/requirements/ngboost-data-requirements.md`.
 """
 
 from __future__ import annotations
