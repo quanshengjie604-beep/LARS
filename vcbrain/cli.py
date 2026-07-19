@@ -11,6 +11,7 @@ from typing import Any, Sequence
 
 from .config import Settings
 from .mini import mini_scrape
+from .outcomes_llm import DEFAULT_REQUESTS_PER_MINUTE
 from .pipeline import CollectionConfig, collect
 from .postprocess import postprocess_snapshots
 from .visualize import write_html
@@ -64,6 +65,11 @@ async def _collect_command(args: argparse.Namespace) -> int:
         use_github=not args.no_github,
         pear_pace_seconds=args.pear_pace,
         output_dir=Path(args.output_dir),
+        enrich_outcomes_llm=False if args.no_outcome_enrichment else None,
+        outcomes_llm_provider="openai" if args.use_openai else "gemini",
+        outcomes_llm_model=args.outcome_llm_model,
+        outcomes_llm_max_workers=args.outcome_llm_workers,
+        outcomes_llm_rpm=args.outcome_llm_rpm,
     )
     result = await collect(config)
     print(json.dumps(result.summary, indent=2, sort_keys=True))
@@ -162,6 +168,37 @@ def build_parser() -> argparse.ArgumentParser:
     collect_parser.add_argument("--no-hackernews", action="store_true")
     collect_parser.add_argument("--no-producthunt", action="store_true")
     collect_parser.add_argument("--no-github", action="store_true")
+    collect_parser.add_argument(
+        "--no-outcome-enrichment",
+        action="store_true",
+        help="disable the web-search LLM query of funding rounds and exit/failure "
+        "outcomes (queried for every company by default when the provider API key is set)",
+    )
+    collect_parser.add_argument(
+        "--use-openai",
+        action="store_true",
+        help="query OpenAI (OPENAI_API_KEY) instead of the default Gemini (GEMINI_API_KEY)",
+    )
+    collect_parser.add_argument(
+        "--outcome-llm-model",
+        default=None,
+        help="model for outcome enrichment (default gemini-3.1-flash-lite / $GEMINI_MODEL, "
+        "or gpt-4o-mini / $OPENAI_MODEL with --use-openai)",
+    )
+    collect_parser.add_argument(
+        "--outcome-llm-workers",
+        type=int,
+        default=8,
+        help="parallel web-search queries for outcome enrichment (default 8)",
+    )
+    collect_parser.add_argument(
+        "--outcome-llm-rpm",
+        type=float,
+        default=DEFAULT_REQUESTS_PER_MINUTE,
+        help="cap on outcome-enrichment requests per minute, shared across workers "
+        f"(default {DEFAULT_REQUESTS_PER_MINUTE:g}; the Gemini account ceiling is 30 RPM; "
+        "pass 0 to disable throttling)",
+    )
 
     mini_parser = sub.add_parser("mini", help="run the deterministic fixture scrape or a bounded live smoke")
     mini_parser.add_argument("--live", action="store_true", help="opt in to network sources")

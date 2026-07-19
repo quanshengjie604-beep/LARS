@@ -20,9 +20,34 @@ class FixtureFetcher:
         self._hn_search = self._json("hn_search.json")
         self._hn_items = self._json("hn_items.json")
         self._producthunt = self._json("producthunt_posts.json")
+        # Canned, name-keyed web-search LLM verdicts stand in for the live Gemini/OpenAI
+        # query so the offline pipeline still produces funding rounds and outcomes
+        # deterministically. Funding rounds come only from here (scraping is ignored).
+        self.outcome_enrichments = self._load_outcome_enrichments()
 
     def _json(self, name: str) -> Any:
         return json.loads((self.fixture_dir / name).read_text(encoding="utf-8"))
+
+    def _load_outcome_enrichments(self) -> dict[str, "OutcomeEnrichment"]:
+        from .outcomes_llm import OutcomeEnrichment
+
+        path = self.fixture_dir / "outcome_enrichments.json"
+        if not path.is_file():
+            return {}
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        verdicts: dict[str, OutcomeEnrichment] = {}
+        for name, data in raw.items():
+            verdicts[name] = OutcomeEnrichment(
+                startup_id="",  # filled in per-company by the pipeline
+                status=data.get("status", "unknown"),
+                failure_observed=bool(data.get("failure_observed", False)),
+                failure_date=data.get("failure_date"),
+                failure_definition=data.get("failure_definition"),
+                status_reason=data.get("status_reason", ""),
+                funding_rounds=data.get("funding_rounds", []),
+                model=data.get("model", "fixture"),
+            )
+        return verdicts
 
     async def get_text(
         self, url: str, *, params: Mapping[str, Any] | None = None, headers: Mapping[str, str] | None = None

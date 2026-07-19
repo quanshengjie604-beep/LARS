@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Iterable, Mapping
@@ -286,27 +287,54 @@ def build_snapshot(
     return SnapshotBuild(final, axes, derived_evidence)
 
 
-# Directory statuses are point-in-time (observed as of the run) and undated. We map
-# the status VALUE token, never the prefix: "a16z listed investment stage:" and
-# "Pear current stage:" both mix real funding stages (Seed, Series A) with terminal
-# outcomes (IPO, M&A, Acquired), so keying on the prefix would mislabel exits. Values
-# are matched case-insensitively; enum targets follow ngboost_data_requirements.md.
-_EXIT_STATUS_VALUES: dict[str, str] = {
-    "public": "ipo",
-    "ipo": "ipo",
-    "spac": "ipo",          # a SPAC listing takes the company public
-    "acquired": "acquisition",
-    "acquisition": "acquisition",
-    "m&a": "acquisition",
-    "exits": "acquisition",  # a16z generic exit flag; a specific type wins when present
-    "exit": "acquisition",
-    "exited": "acquisition",
-}
-_FAILURE_STATUS_VALUES = frozenset(
-    {"inactive", "dead", "defunct", "closed", "ceased", "shutdown", "shut down"}
+# Directory statuses are point-in-time (observed as of the run) and undated. We read
+# the status VALUE (text after the final ":"), never the prefix: "a16z listed investment
+# stage:" and "Pear current stage:" both mix real funding stages (Seed, Series A) with
+# terminal outcomes (IPO, M&A, Acquired), so keying on the prefix would mislabel exits.
+# The value is normalized (case-folded; ampersand/punctuation/whitespace flattened) and
+# matched by whole-word keyword, so realistic phrasings ("Acquired by X", "M & A",
+# "Acquired.") are caught, not just the clean closed-set tokens. Matching stays
+# conservative: unknown vocabulary yields no label rather than a guessed one. exit_type
+# and failure_definition targets follow the enums in ngboost_data_requirements.md.
+_EXIT_KEYWORDS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\bipo\b"), "ipo"),
+    (re.compile(r"\bpublic(?:ly)?\b"), "ipo"),
+    (re.compile(r"\bspac\b"), "ipo"),            # a (de-)SPAC listing takes the company public
+    (re.compile(r"\bde spac\b"), "ipo"),
+    (re.compile(r"\bacqui\w*"), "acquisition"),  # acquire/acquired/acquisition/acqui-hired
+    (re.compile(r"\bmerg\w*"), "acquisition"),   # merger/merged
+    (re.compile(r"\bm and a\b"), "acquisition"),  # "M&A" / "M & A" normalize to "m and a"
+    (re.compile(r"\bbought\b"), "acquisition"),
+    (re.compile(r"\bexit(?:s|ed)?\b"), "acquisition"),  # a16z generic flag; a specific type wins
 )
-# Prefer the more definitive public-listing signal when several exit tokens coexist.
+# failure_definition enum: {ceased_operations, dissolved, bankruptcy, shutdown_confirmed,
+# other}. Ordered by specificity so the first match on a value is the strongest reading;
+# "inactive" is a catch-all directory flag -> "other".
+_FAILURE_KEYWORDS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\bbankrupt\w*"), "bankruptcy"),
+    (re.compile(r"\bliquidat\w*"), "dissolved"),
+    (re.compile(r"\bdissolved\b"), "dissolved"),
+    (re.compile(r"\bdead\b"), "shutdown_confirmed"),
+    (re.compile(r"\bdefunct\b"), "shutdown_confirmed"),
+    (re.compile(r"\bshut ?down\b"), "shutdown_confirmed"),
+    (re.compile(r"\bceased\b"), "ceased_operations"),
+    (re.compile(r"\bwound down\b"), "ceased_operations"),
+    (re.compile(r"\bwinding down\b"), "ceased_operations"),
+    (re.compile(r"\bno longer operating\b"), "ceased_operations"),
+    (re.compile(r"\bsunset\b"), "ceased_operations"),
+    (re.compile(r"\binactive\b"), "other"),
+)
+# Precedence when several tokens coexist: a more definitive/specific outcome wins.
 _EXIT_TYPE_PRIORITY = {"ipo": 0, "acquisition": 1}
+_FAILURE_DEFINITION_PRIORITY = {
+    "bankruptcy": 0, "dissolved": 1, "shutdown_confirmed": 2, "ceased_operations": 3, "other": 4,
+}
+
+
+def _normalize_status_value(status: str) -> str:
+    """Value after the final ':', case-folded with ampersand/punctuation/whitespace flattened."""
+    value = status.rsplit(":", 1)[-1].casefold().replace("&", " and ")
+    return re.sub(r"[^a-z0-9]+", " ", value).strip()
 
 
 @dataclass(slots=True)
@@ -314,35 +342,89 @@ class StatusOutcome:
     """Terminal exit/failure signal derived from point-in-time directory statuses."""
 
     exit_type: str | None  # "ipo" | "acquisition" | None
-    failure: bool
-    matched_statuses: list[str]  # exact status strings that drove the classification
+    failure_definition: str | None  # ngboost failure enum member | None
+    matched_statuses: list[str]  # exact status strings that drove the chosen label
+
+    @property
+    def failure(self) -> bool:
+        return self.failure_definition is not None
 
 
 def classify_status_outcome(statuses: Iterable[str]) -> StatusOutcome:
     """Classify directory statuses into a terminal exit/failure signal.
 
     Returns the classification only; the caller decides how to encode dates because a
-    directory status is undated (a current observation, not a dated event). An exit
-    takes priority over a failure when both appear (a specific liquidity event is a
-    stronger, more specific claim than the catch-all "inactive" flag).
+    directory status is undated (a current observation, not a dated event). An exit takes
+    priority over a failure when both appear (a specific liquidity event is a stronger,
+    more specific claim than a catch-all inactive/dead flag).
     """
-    exit_types: list[str] = []
-    exit_matches: list[str] = []
-    failure_matches: list[str] = []
+    exit_hits: list[tuple[str, str]] = []  # (exit_type, status)
+    failure_hits: list[tuple[str, str]] = []  # (failure_definition, status)
     for status in statuses:
-        value = status.rsplit(":", 1)[-1].strip().casefold()
-        mapped = _EXIT_STATUS_VALUES.get(value)
-        if mapped is not None:
-            exit_types.append(mapped)
-            exit_matches.append(status)
-        elif value in _FAILURE_STATUS_VALUES:
-            failure_matches.append(status)
-    if exit_types:
-        exit_type = min(exit_types, key=lambda item: _EXIT_TYPE_PRIORITY.get(item, 99))
-        return StatusOutcome(exit_type, False, sorted(set(exit_matches)))
-    if failure_matches:
-        return StatusOutcome(None, True, sorted(set(failure_matches)))
-    return StatusOutcome(None, False, [])
+        if not isinstance(status, str):
+            continue
+        value = _normalize_status_value(status)
+        matched_types = {exit_type for pattern, exit_type in _EXIT_KEYWORDS if pattern.search(value)}
+        if matched_types:
+            exit_hits.extend((exit_type, status) for exit_type in matched_types)
+            continue
+        definition = next(
+            (definition for pattern, definition in _FAILURE_KEYWORDS if pattern.search(value)), None
+        )
+        if definition is not None:
+            failure_hits.append((definition, status))
+    if exit_hits:
+        chosen = min((exit_type for exit_type, _ in exit_hits), key=lambda item: _EXIT_TYPE_PRIORITY.get(item, 99))
+        matched = sorted({status for exit_type, status in exit_hits if exit_type == chosen})
+        return StatusOutcome(chosen, None, matched)
+    if failure_hits:
+        chosen = min((defn for defn, _ in failure_hits), key=lambda item: _FAILURE_DEFINITION_PRIORITY.get(item, 99))
+        matched = sorted({status for defn, status in failure_hits if defn == chosen})
+        return StatusOutcome(None, chosen, matched)
+    return StatusOutcome(None, None, [])
+
+
+def _outcome_enrichment_evidence(
+    enrichment: Any,
+    *,
+    startup_id: str,
+    location: str,
+    as_of: date,
+    collected_at: str,
+) -> Evidence:
+    """Evidence record backing a web-search LLM failure determination.
+
+    The verdict is model-derived from live web search, so it is recorded as
+    estimated/unverified — not a dated, independently verified transaction — mirroring
+    how an undated directory-status failure is treated. A dead website alone is not
+    sufficient proof (ngboost_data_requirements.md §5.3); the excerpt carries the
+    model's cited justification so a reviewer can see what the claim rests on.
+    """
+    reason = (getattr(enrichment, "status_reason", "") or "").strip()
+    model = getattr(enrichment, "model", "llm") or "llm"
+    failure_definition = getattr(enrichment, "failure_definition", None) or "other"
+    excerpt = (
+        f"Web-search LLM ({model}) determination through {as_of.isoformat()}: the company "
+        f"has no exit/failure signal in the collected directories, and a live web search "
+        f"indicates it is dissolved/no longer operating (failure_definition={failure_definition}). "
+        f"Model justification: {reason or 'not provided'}. This is a model-derived, "
+        "web-sourced signal recorded as estimated and unverified, not an independently "
+        "verified transaction; the failure date is the confirmed ceased date when available, "
+        "otherwise the observation horizon."
+    )
+    return make_evidence(
+        startup_id=startup_id,
+        channel="openai_web_search",
+        source_type="manual_research",
+        document_name=f"Web-search LLM outcome determination ({model})",
+        excerpt=excerpt,
+        source_uri=None,
+        document_date=as_of.isoformat(),
+        collected_at=collected_at,
+        location=location,
+        verification_status="estimated",
+        confidence="low",
+    )
 
 
 def build_training_records(
@@ -355,6 +437,7 @@ def build_training_records(
     disclosures: Iterable[Mapping[str, Any]],
     as_of: date,
     collected_at: str,
+    outcome_enrichment: Any | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Evidence]]:
     company_rounds = sorted(
         [round_ for round_ in rounds if round_.startup_id == company.startup_id and parse_date(round_.date)],
@@ -369,9 +452,27 @@ def build_training_records(
     # It is applied per snapshot below using as_of as the observation horizon, never
     # backdated into the historical feature snapshots.
     status_outcome = classify_status_outcome(company.statuses)
+    # When the directory carries no exit/failure token at all, there is no information
+    # about whether the company is alive. An optional web-search LLM verdict may supply
+    # a confirmed dissolution for exactly those companies; a directory-status terminal
+    # signal is more specific and always takes precedence over it.
+    llm_failure = (
+        outcome_enrichment is not None
+        and getattr(outcome_enrichment, "failure_observed", False)
+        and status_outcome.exit_type is None
+        and not status_outcome.failure
+    )
     # One post-round snapshot per distinct date. Same-day entries cannot be a
     # strictly later next round and are represented as one transition point.
     observation_dates = sorted({round_.date for round_ in company_rounds if parse_date(round_.date) <= as_of})
+    # A company with no funding events yields no snapshot, so an LLM-confirmed failure
+    # would have nowhere to live. Anchor one snapshot at the founding date (Jan 1 of
+    # founded_year) when known, giving a meaningful founding->failure duration. Without
+    # a founded_year there is no defensible observation date, so the company is skipped.
+    if not observation_dates and llm_failure and company.founded_year:
+        founded = date(company.founded_year, 1, 1)
+        if founded < as_of:
+            observation_dates = [founded.isoformat()]
     for observation in observation_dates:
         cutoff = parse_date(observation)
         if cutoff is None:
@@ -450,6 +551,51 @@ def build_training_records(
             )
             derived.append(status_evidence)
             outcome_source_ids.append(status_evidence.source_id)
+
+        # Web-search LLM verdict, applied only to the strictly-post-cutoff window and
+        # only when the directory carried no terminal signal of its own. It fills the
+        # failure fields that would otherwise stay null for a company we had no
+        # information about. A confirmed ceased date is used when it falls after the
+        # cutoff; otherwise the observation horizon dates the (estimated) failure.
+        llm_failure_here = llm_failure and censor_days > 0
+        llm_failure_date: str | None = None
+        if llm_failure_here:
+            ceased = parse_date(getattr(outcome_enrichment, "failure_date", None))
+            llm_failure_date = (
+                ceased.isoformat() if ceased is not None and ceased > cutoff else as_of.isoformat()
+            )
+            llm_evidence = _outcome_enrichment_evidence(
+                outcome_enrichment,
+                startup_id=company.startup_id,
+                location=build.record["snapshot_id"],
+                as_of=as_of,
+                collected_at=collected_at,
+            )
+            derived.append(llm_evidence)
+            outcome_source_ids.append(llm_evidence.source_id)
+
+        failure_observed = has_failure or llm_failure_here
+        failure_date = (
+            as_of.isoformat() if has_failure else llm_failure_date if llm_failure_here else None
+        )
+        failure_definition = (
+            status_outcome.failure_definition
+            if has_failure
+            else (getattr(outcome_enrichment, "failure_definition", None) or "other")
+            if llm_failure_here
+            else None
+        )
+        terminal = terminal or llm_failure_here
+        # Right-censored survival duration: measure to the failure event when one was
+        # observed, otherwise to the censoring horizon (as_of, via censor_days). Keying
+        # this off failure_observed/failure_date keeps the duration consistent with the
+        # event fields instead of always reporting the full observation window — a
+        # censored row (no failure) now carries the censoring time, and an observed
+        # failure carries cutoff -> failure_date, not cutoff -> as_of.
+        failure_dt = parse_date(failure_date) if failure_observed else None
+        time_to_failure_days = (
+            max(0, (failure_dt - cutoff).days) if failure_dt is not None else censor_days
+        )
         outcome = {
             "startup_id": company.startup_id,
             "opportunity_id": build.record["opportunity_id"],
@@ -463,11 +609,11 @@ def build_training_records(
             "next_event_date": next_round.date if next_round else None,
             "time_to_next_event_days": (next_date - cutoff).days if next_date else censor_days,
             "next_event_observed": next_round is not None,
-            "failure_observed": has_failure,
-            "failure_date": as_of.isoformat() if has_failure else None,
-            "failure_definition": "other" if has_failure else None,
-            "time_to_failure_days": censor_days,
-            "failure_event_observed": has_failure,
+            "failure_observed": failure_observed,
+            "failure_date": failure_date,
+            "failure_definition": failure_definition,
+            "time_to_failure_days": time_to_failure_days,
+            "failure_event_observed": failure_observed,
             "revenue_start_date": None,
             "revenue_start_usd": None,
             "revenue_end_date": None,

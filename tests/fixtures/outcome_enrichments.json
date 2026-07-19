@@ -1,0 +1,56 @@
+{
+  "Acme AI": {
+    "status": "operating",
+    "failure_observed": false,
+    "failure_date": null,
+    "failure_definition": null,
+    "status_reason": "Company website and press indicate active operations.",
+    "model": "fixture",
+    "funding_rounds": [
+      {"date": "2024-06-01", "stage": "Seed", "amount_usd": 2000000, "amount_text": "$2M"},
+      {"date": "2025-03-15", "stage": "Series A", "amount_usd": 12000000, "amount_text": "$12M"}
+    ]
+  },
+  "EcoGrid": {
+    "status": "operating",
+    "failure_observed": false,
+    "failure_date": null,
+    "failure_definition": null,
+    "status_reason": "Recent product launch reported by trade press.",
+    "model": "fixture",
+    "funding_rounds": [
+      {"date": "2024-09-10", "stage": "Seed", "amount_usd": 3500000, "amount_text": "$3.5M"}
+    ]
+  },
+  "Nova Health": {
+    "status": "dissolved",
+    "failure_observed": true,
+    "failure_date": "2025-11-01",
+    "failure_definition": "ceased_operations",
+    "status_reason": "TechCrunch reports the company wound down operations in late 2025.",
+    "model": "fixture",
+    "funding_rounds": [
+      {"date": "2023-05-20", "stage": "Seed", "amount_usd": 1500000, "amount_text": "$1.5M"}
+    ]
+  },
+  "RocketOps": {
+    "status": "operating",
+    "failure_observed": false,
+    "failure_date": null,
+    "failure_definition": null,
+    "status_reason": "Company is still hiring and shipping.",
+    "model": "fixture",
+    "funding_rounds": [
+      {"date": "2024-11-05", "stage": "Pre-Seed", "amount_usd": 750000, "amount_text": "$750k"}
+    ]
+  },
+  "Solo Robotics": {
+    "status": "operating",
+    "failure_observed": false,
+    "failure_date": null,
+    "failure_definition": null,
+    "status_reason": "Founder active on public channels.",
+    "model": "fixture",
+    "funding_rounds": []
+  }
+}

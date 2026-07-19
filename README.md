@@ -52,8 +52,29 @@ Optional credentials are read from the environment:
 | `PRODUCTHUNT_TOKEN` | Official Product Hunt GraphQL API |
 | `STARTX_API_KEY` or `CONSIDER_API_KEY` | Authenticated StartX Consider board |
 | `GITHUB_TOKEN` | Explicit directory-linked GitHub organizations |
+| `OPENAI_API_KEY` | Web-search LLM backfill of unlabelled failure outcomes (see below) |
+| `OPENAI_MODEL` | Override the enrichment model (default `gpt-4o-mini`) |
 | `VCBRAIN_AS_OF` | Snapshot/censoring date (`YYYY-MM-DD`) |
 | `VCBRAIN_CONCURRENCY` | Global asynchronous request/work bound |
+
+### Outcome enrichment (web-search LLM)
+
+Many companies carry no exit/failure token in the collected directory statuses, so the deterministic
+pipeline has no information about their series funding or whether they are still operating or
+dissolved — their training outcome stays right-censored (`failure_observed=false`, `failure_date=null`).
+
+When `OPENAI_API_KEY` is set, a `training`/`both` run backfills exactly those companies: it queries a
+low-cost, web-search-enabled model (`gpt-4o-mini` via the Responses API) with, per company,
+*"Please give me a table of dates and founding amount for each funding round of \<company\>, and
+whether it is still operating or is dissolved."* The queries run **in parallel** on a thread pool
+(`--outcome-llm-workers`, default 8). A confirmed dissolution/bankruptcy sets `failure_observed`,
+`failure_date` (the verified ceased date when available, else the observation horizon), and
+`failure_definition`, and writes a backing evidence record (channel `openai_web_search`, marked
+`estimated`/unverified). A still-operating or unknown verdict leaves the censored baseline untouched,
+and a directory-status exit/failure always takes precedence over the model. The network-free fixture
+mini scrape never calls the API, so `python -m vcbrain mini` stays deterministic and offline.
+
+Disable it with `--no-outcome-enrichment`.
 
 ### Source boundary
 

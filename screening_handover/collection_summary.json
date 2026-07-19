@@ -1,23 +1,23 @@
 {
   "as_of": "2026-07-19",
-  "collected_at": "2026-07-19T07:02:46Z",
+  "collected_at": "2026-07-19T08:43:07Z",
   "companies_discovered": 6168,
-  "companies_processed": 6168,
-  "enrichment_tasks": 1495,
-  "evidence_records": 14695,
-  "financial_disclosures": 106,
-  "funding_rounds": 66,
+  "companies_processed": 10,
+  "enrichment_tasks": 446,
+  "evidence_records": 54,
+  "financial_disclosures": 0,
+  "funding_rounds": 15,
   "inference_requests": 0,
   "source_status": {
     "a16z": "ok",
     "github": "skipped",
-    "hackernews": "partial",
+    "hackernews": "ok",
     "pear": "ok",
     "producthunt": "skipped",
     "sec_form_d": "skipped",
     "startx": "skipped",
     "yc": "ok"
   },
-  "training_features": 65,
-  "training_outcomes": 65
+  "training_features": 15,
+  "training_outcomes": 15
 }

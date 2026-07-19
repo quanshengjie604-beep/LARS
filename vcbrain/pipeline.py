@@ -8,12 +8,13 @@ import os
 from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Iterable, Sequence
+from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence
 
 from tqdm import tqdm
 
 from .assemble import FEATURE_FIELDS, build_snapshot, build_training_records
 from .config import Settings
+from .outcomes_llm import DEFAULT_REQUESTS_PER_MINUTE, enrich_outcomes, resolve_api_key
 from .context import CohortContext
 from .datadict import render_data_dictionary
 from .evidence import dedupe_evidence, make_evidence
@@ -53,6 +54,17 @@ class CollectionConfig:
     output_dir: Path | None = None
     collected_at: str | None = None
     write_outputs: bool = True
+    # Web-search LLM enrichment of company funding rounds and exit/failure outcomes.
+    # Runs for EVERY company by default (not conditioned on missing directory signal),
+    # and its funding rounds replace the scraped ones. None means "auto": run when the
+    # provider's API key is set and a live network fetcher is in use; the fixture
+    # pipeline never enriches, keeping the deterministic tests offline. Set to False to
+    # opt out entirely.
+    enrich_outcomes_llm: bool | None = None
+    outcomes_llm_provider: str = "gemini"  # "gemini" (default) or "openai"
+    outcomes_llm_model: str | None = None
+    outcomes_llm_max_workers: int = 8
+    outcomes_llm_rpm: float = DEFAULT_REQUESTS_PER_MINUTE  # cap on request start rate
 
     def __post_init__(self) -> None:
         if self.mode not in {"inference", "training", "both"}:
@@ -138,6 +150,78 @@ def _a16z_initial_investments(
                 confidence="medium",
             )
         )
+    return rounds, evidence
+
+
+def _llm_funding_rounds(
+    companies: Iterable[Company],
+    enrichments: Mapping[str, Any],
+    *,
+    as_of: date,
+    collected_at: str,
+) -> tuple[list[FundingRound], list[Evidence]]:
+    """Build funding rounds (and backing evidence) from the web-search LLM verdict.
+
+    Funding rounds come exclusively from the LLM here — the scraped funding-round
+    collection is ignored. Each round is recorded as an estimated/unverified,
+    web-sourced signal; only rounds dated on or before ``as_of`` are kept.
+    """
+    rounds: list[FundingRound] = []
+    evidence: list[Evidence] = []
+    by_id = {company.startup_id: company for company in companies}
+    for startup_id, enrichment in enrichments.items():
+        company = by_id.get(startup_id)
+        if company is None:
+            continue
+        model = getattr(enrichment, "model", "llm") or "llm"
+        for row in getattr(enrichment, "funding_rounds", None) or []:
+            event_date = parse_date(row.get("date"))
+            if event_date is None or event_date > as_of:
+                continue
+            amount = row.get("amount_usd")
+            amount_text = row.get("amount_text")
+            stage = row.get("stage")
+            headline = (
+                f"Web-search LLM ({model}) reports a funding round for {company.name} "
+                f"dated {event_date.isoformat()}"
+                + (f", stage {stage}" if stage else "")
+                + (f", amount {amount_text}" if amount_text else "")
+                + ". This is a model-derived, web-sourced signal recorded as estimated "
+                "and unverified, not an independently verified transaction."
+            )
+            item = make_evidence(
+                startup_id=company.startup_id,
+                channel="llm_web_search_funding",
+                source_type="manual_research",
+                document_name=f"Web-search LLM funding round ({model}): {company.name}",
+                excerpt=headline,
+                source_uri=None,
+                document_date=as_of.isoformat(),
+                collected_at=collected_at,
+                verification_status="estimated",
+                confidence="low",
+            )
+            company.source_ids = sorted({*company.source_ids, item.source_id})
+            evidence.append(item)
+            rounds.append(
+                FundingRound(
+                    startup_id=company.startup_id,
+                    company_name=company.name,
+                    date=event_date.isoformat(),
+                    date_basis="announced",
+                    stage=None,
+                    raw_stage=(str(stage).strip() if stage else None),
+                    amount_usd=amount if isinstance(amount, (int, float)) else None,
+                    amount_original=None,
+                    currency=None,
+                    source_ids=[item.source_id],
+                    source_names=[f"web-search LLM ({model})"],
+                    source_urls=[],
+                    headline=headline,
+                    verification_status="estimated",
+                    confidence="low",
+                )
+            )
     return rounds, evidence
 
 
@@ -380,6 +464,72 @@ def write_collection_outputs(result: CollectionResult, output_dir: Path, *, as_o
     )
 
 
+def _fixture_outcome_enrichments(
+    fetcher: Fetcher, targets: Sequence[Company]
+) -> dict[str, Any]:
+    """Map a FixtureFetcher's canned, name-keyed verdicts onto target startup_ids.
+
+    Keeps the offline pipeline network-free while still exercising the LLM-derived
+    funding-round and outcome path. Returns ``{}`` when the fixture supplies none.
+    """
+    from .outcomes_llm import OutcomeEnrichment
+
+    canned = getattr(fetcher, "outcome_enrichments", None)
+    if not canned:
+        return {}
+    results: dict[str, Any] = {}
+    for company in targets:
+        verdict = canned.get(company.name)
+        if verdict is None:
+            continue
+        results[company.startup_id] = replace(verdict, startup_id=company.startup_id) if isinstance(
+            verdict, OutcomeEnrichment
+        ) else verdict
+    return results
+
+
+async def _enrich_outcomes_llm(
+    config: CollectionConfig, targets: Sequence[Company], fetcher: Fetcher
+) -> dict[str, Any]:
+    """Query the web-search LLM for the funding/exit outcome of EVERY company.
+
+    Unlike the previous behaviour, this always queries the LLM for every company —
+    it is not conditioned on the directory lacking an exit/failure signal. It runs
+    with an API key present (Gemini by default, OpenAI when selected) and never
+    against the offline fixture fetcher (so the deterministic tests stay
+    network-free). The blocking, thread-pooled call is offloaded so the event loop
+    is not held.
+    """
+    # Explicit opt-out wins.
+    if config.enrich_outcomes_llm is False:
+        return {}
+    # The fixture fetcher must never trigger a network call; gate by class name to
+    # avoid importing mini.py (which imports this module). It may, however, supply
+    # canned per-company verdicts so the offline pipeline still exercises the
+    # LLM-rounds/outcome path deterministically.
+    if type(fetcher).__name__ == "FixtureFetcher":
+        return _fixture_outcome_enrichments(fetcher, targets)
+    if not resolve_api_key(provider=config.outcomes_llm_provider):
+        return {}
+
+    pending = [
+        (company.startup_id, company.name)
+        for company in targets
+        if company.name
+    ]
+    if not pending:
+        return {}
+    return await asyncio.to_thread(
+        enrich_outcomes,
+        pending,
+        as_of=config.settings.as_of,
+        provider=config.outcomes_llm_provider,
+        model=config.outcomes_llm_model,
+        max_workers=config.outcomes_llm_max_workers,
+        requests_per_minute=config.outcomes_llm_rpm,
+    )
+
+
 async def _collect_with_fetcher(config: CollectionConfig, fetcher: Fetcher) -> CollectionResult:
     collected_at = config.collected_at or utc_now_iso()
     directory_results = await _discover(config, fetcher, collected_at=collected_at)
@@ -397,25 +547,31 @@ async def _collect_with_fetcher(config: CollectionConfig, fetcher: Fetcher) -> C
     directory_evidence = [item for item in directory_evidence if item.startup_id in target_ids]
     directory_runs = [result.run for result in directory_results if result.run]
 
-    a16z_rounds, a16z_evidence = _a16z_initial_investments(
-        targets, as_of=config.settings.as_of, collected_at=collected_at
-    )
     enrichment_results, enrichment_runs = await _enrich_companies(
         targets, config, fetcher, collected_at=collected_at
     )
     enrichment_evidence = [item for result in enrichment_results for item in result.evidence]
-    enrichment_rounds = [item for result in enrichment_results for item in result.funding_rounds]
     signals: dict[str, dict[str, Any]] = {company.startup_id: {} for company in targets}
     for enrichment in enrichment_results:
         signals.setdefault(enrichment.startup_id, {}).update(enrichment.signals)
 
-    sec_rounds, sec_evidence, sec_run = await collect_form_d(
+    # SEC Form D rounds are intentionally discarded — funding rounds come from the
+    # web-search LLM only — but the filing evidence is retained.
+    _sec_rounds, sec_evidence, sec_run = await collect_form_d(
         targets, config.sec_form_d_zips, collected_at=collected_at
     )
-    all_evidence = dedupe_evidence(
-        [*directory_evidence, *a16z_evidence, *enrichment_evidence, *sec_evidence]
+
+    # Funding rounds and exit/failure outcomes come from the web-search LLM for every
+    # company; the scraped funding-round collection is ignored entirely.
+    outcome_enrichments = await _enrich_outcomes_llm(config, targets, fetcher)
+    llm_rounds, llm_round_evidence = _llm_funding_rounds(
+        targets, outcome_enrichments, as_of=config.settings.as_of, collected_at=collected_at
     )
-    rounds = dedupe_funding_rounds([*a16z_rounds, *enrichment_rounds, *sec_rounds])
+
+    all_evidence = dedupe_evidence(
+        [*directory_evidence, *enrichment_evidence, *sec_evidence, *llm_round_evidence]
+    )
+    rounds = dedupe_funding_rounds(llm_rounds)
     rounds = [round_ for round_ in rounds if (parse_date(round_.date) or config.settings.as_of) <= config.settings.as_of]
     context = CohortContext(targets, rounds)
     disclosure_rows = extract_financial_disclosures([item.to_dict(extended=True) for item in all_evidence])
@@ -440,6 +596,7 @@ async def _collect_with_fetcher(config: CollectionConfig, fetcher: Fetcher) -> C
                     disclosures=company_disclosures,
                     as_of=config.settings.as_of,
                     collected_at=collected_at,
+                    outcome_enrichment=outcome_enrichments.get(company.startup_id),
                 )
                 training_features.extend(features)
                 training_outcomes.extend(outcomes)
