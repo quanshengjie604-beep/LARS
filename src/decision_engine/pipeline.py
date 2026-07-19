@@ -115,6 +115,8 @@ def infer_all(config: dict[str, Any], output_path: str | Path) -> list[dict[str,
             "startup_id": record.get("startup_id"),
             "opportunity_id": record.get("opportunity_id"),
             "snapshot_id": record.get("snapshot_id"),
+            "company_name": record.get("company_name"),
+            "candidate_ids": record.get("candidate_ids", []),
             "prediction_generated_at": datetime.now(timezone.utc).isoformat(),
             "models": {model_id: rows[idx] for model_id, rows in predictions.items()},
             "model_confidence": _confidence(record),
@@ -122,4 +124,3 @@ def infer_all(config: dict[str, Any], output_path: str | Path) -> list[dict[str,
         })
     write_jsonl(output_path, output)
     return output
-

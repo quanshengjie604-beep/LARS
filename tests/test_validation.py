@@ -25,3 +25,10 @@ def test_live_rejects_outcomes_and_future_cutoff():
     cutoff_report = validate_features([future_cutoff], live=True)
     assert any("outcome" in error for error in outcome_report.errors)
     assert not cutoff_report.valid
+
+
+def test_growth_may_be_null_when_explicitly_excluded():
+    row = outcome()
+    row['growth'] = None
+    row['m4_included'] = False
+    assert validate_join([feature()], [row]).valid

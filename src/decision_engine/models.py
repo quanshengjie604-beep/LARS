@@ -37,7 +37,16 @@ class ProbabilisticEstimator:
     classes_: list[str] | None = None
     survival_times_: np.ndarray | None = None
     survival_probs_: np.ndarray | None = None
+    prior_parameters: dict[str, Any] | None = None
 
+    @classmethod
+    def from_prior(cls, kind: str, parameters: dict[str, Any], random_state: int = 42):
+        estimator = cls(kind=kind, random_state=random_state)
+        estimator.backend = "declared_prior"
+        estimator.prior_parameters = parameters
+        if kind in {"classification", "multiclass"}:
+            estimator.classes_ = list(parameters["probabilities"])
+        return estimator
     def fit(self, X: pd.DataFrame, y: Any, event: Any = None):
         if self.kind == "survival":
             return self._fit_survival(X, np.asarray(y, float), np.asarray(event, bool))
@@ -48,14 +57,21 @@ class ProbabilisticEstimator:
         if self.kind in {"classification", "multiclass"}:
             if has_ngboost:
                 from ngboost import NGBClassifier
-                estimator = NGBClassifier(random_state=self.random_state, verbose=False)
+                from ngboost.distns import k_categorical
+                estimator = NGBClassifier(Dist=k_categorical(len(np.unique(y))), random_state=self.random_state, verbose=False)
                 self.backend = "ngboost"
             else:
                 estimator = HistGradientBoostingClassifier(random_state=self.random_state)
                 self.backend = "sklearn_fallback"
             self.pipeline = Pipeline([("prep", prep), ("model", estimator)])
-            self.pipeline.fit(X, y)
-            self.classes_ = [str(v) for v in self.pipeline.named_steps["model"].classes_]
+            if has_ngboost:
+                classes = list(np.unique(y))
+                encoded = np.asarray([classes.index(value) for value in y], dtype=int)
+                self.pipeline.fit(X, encoded)
+                self.classes_ = [str(value) for value in classes]
+            else:
+                self.pipeline.fit(X, y)
+                self.classes_ = [str(v) for v in self.pipeline.named_steps["model"].classes_]
         else:
             raw_y = np.asarray(y, float)
             log_y = np.log(np.clip(raw_y, 1e-12, None))
@@ -69,7 +85,7 @@ class ProbabilisticEstimator:
                 self.backend = "sklearn_fallback"
             self.pipeline = Pipeline([("prep", prep), ("model", estimator)])
             self.pipeline.fit(X, log_y)
-            residual = log_y - self.pipeline.predict(X)
+            residual = log_y - estimator.predict(self.pipeline.named_steps["prep"].transform(X))
             self.residual_sigma = max(float(np.std(residual)), 1e-6)
         return self
 
@@ -102,10 +118,24 @@ class ProbabilisticEstimator:
         return self
 
     def predict_distribution(self, X: pd.DataFrame, quantiles: list[float], horizons: list[int]) -> list[dict[str, Any]]:
+        if self.backend == "declared_prior":
+            params = self.prior_parameters or {}
+            if self.kind in {"classification", "multiclass"}:
+                row = {str(k): float(v) for k, v in params["probabilities"].items()}
+                return [{"distribution": "categorical", "parameters": row} for _ in range(len(X))]
+            mu, sigma = float(params["log_mu"]), float(params["log_sigma"])
+            from statistics import NormalDist
+            qs = {str(q): math.exp(mu + sigma * NormalDist().inv_cdf(q)) for q in quantiles}
+            row = {"distribution": "lognormal", "parameters": {"log_mu": mu, "log_sigma": sigma}, "quantiles": qs}
+            return [row for _ in range(len(X))]
         if self.kind == "survival":
             return self._predict_survival(X, horizons)
         if self.kind in {"classification", "multiclass"}:
-            probs = self.pipeline.predict_proba(X)
+            if self.backend == "ngboost":
+                transformed = self.pipeline.named_steps["prep"].transform(X)
+                probs = self.pipeline.named_steps["model"].predict_proba(transformed)
+            else:
+                probs = self.pipeline.predict_proba(X)
             return [{"distribution": "categorical", "parameters": {c: float(p) for c, p in zip(self.classes_ or [], row)}} for row in probs]
         model = self.pipeline.named_steps["model"]
         transformed = self.pipeline.named_steps["prep"].transform(X)

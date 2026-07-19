@@ -1,0 +1,23 @@
+{
+    "training_features_sha256":  "35cd798a332bcc26e7194ee8800111a53731445eb41b38ccf7ba363bbc4813f1",
+    "training_outcomes_sha256":  "4db2bfa1016fb9706476d19a50796084dc67cb11d3e505fbf5b7d3f37575909b",
+    "warning":  "DO NOT USE FOR INVESTMENT DECISIONS",
+    "created_at":  "2026-07-19T05:08:18.6394258Z",
+    "synthetic_models":  [
+                             "m1",
+                             "m4",
+                             "m6"
+                         ],
+    "training_rows":  25,
+    "checkpoint_version":  "demo-v1",
+    "inference_rows":  1020,
+    "backends":  {
+                     "m4":  "ngboost",
+                     "m1":  "ngboost",
+                     "m6":  "ngboost",
+                     "m5":  "ngboost",
+                     "m3":  "kaplan_meier_fallback",
+                     "m2":  "kaplan_meier_fallback"
+                 },
+    "demo_synthetic":  true
+}

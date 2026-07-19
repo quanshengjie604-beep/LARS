@@ -90,7 +90,8 @@ def validate_join(features: list[dict[str, Any]], outcomes: list[dict[str, Any]]
             errors.append(f"outcome {idx}: duplicate snapshot_id {sid}")
         outcome_ids.add(sid)
         for group in required_groups:
-            if not isinstance(row.get(group), dict):
+            excluded_growth = group == "growth" and row.get("m4_included") is False and row.get(group) is None
+            if not excluded_growth and not isinstance(row.get(group), dict):
                 errors.append(f"outcome {idx}: missing object {group}")
         if not row.get("outcome_observation_end_date"):
             errors.append(f"outcome {idx}: missing outcome_observation_end_date")

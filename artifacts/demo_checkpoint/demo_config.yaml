@@ -1,0 +1,32 @@
+project:
+  random_state: 42
+  model_dir: artifacts/demo_checkpoint
+  report_dir: artifacts/demo_reports
+
+data:
+  training_features: screening_handover/training_features.jsonl
+  training_outcomes: screening_handover/demo_training_outcomes.jsonl
+  inference_requests: artifacts/founder_inference_requests.jsonl
+  evidence_registry: screening_handover/evidence_registry.jsonl
+
+training:
+  minimum_rows: 10
+  validation_fraction: 0.2
+  strict_backend: false
+  models: [m1, m2, m3, m4, m5, m6]
+
+models:
+  m1: {kind: classification, target: progressed_within_24_months}
+  m2: {kind: survival, duration: time_to_next_event_days, event: next_event_observed}
+  m3: {kind: survival, duration: time_to_failure_days, event: failure_event_observed}
+  m4: {kind: positive_regression, target: annual_growth_factor}
+  m5: {kind: multiclass, target: exit_type}
+  m6: {kind: positive_regression, target: exit_value_usd}
+
+inference:
+  quantiles: [0.1, 0.5, 0.9]
+  survival_horizons_days: [365, 730, 1825]
+
+demo:
+  synthetic_outcomes: true
+  warning: DO NOT USE FOR INVESTMENT DECISIONS

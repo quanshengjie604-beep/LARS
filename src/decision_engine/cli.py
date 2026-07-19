@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
+from .founder_adapter import prepare_founder_requests
 from .io import load_config, read_jsonl
 from .pipeline import infer_all, train_all
 from .validation import validate_features, validate_join
@@ -14,7 +15,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("validate")
     sub.add_parser("train")
+    prepare = sub.add_parser("prepare-founders")
+    prepare.add_argument("--input", default="screening_handover/founder_enriched/sourcing_candidates.jsonl")
+    prepare.add_argument("--output", default="artifacts/founder_inference_requests.jsonl")
+    prepare.add_argument("--date", default=None)
     infer = sub.add_parser("infer")
+    infer.add_argument("--input", default=None)
     infer.add_argument("--output", default="artifacts/predictions.jsonl")
     return parser
 
@@ -36,6 +42,12 @@ def main(argv=None) -> int:
     if args.command == "train":
         print(json.dumps(train_all(config), ensure_ascii=False, indent=2))
         return 0
+    if args.command == "prepare-founders":
+        count = prepare_founder_requests(args.input, args.output, args.date)
+        print(json.dumps({"output": args.output, "records": count}, ensure_ascii=False))
+        return 0
+    if args.input:
+        config["data"]["inference_requests"] = args.input
     result = infer_all(config, args.output)
     print(json.dumps({"output": args.output, "records": len(result)}, ensure_ascii=False))
     return 0
