@@ -1,0 +1,30 @@
+{
+  "companies": [
+    {
+      "id": "yc-acme",
+      "name": "Acme AI",
+      "website": "https://acme.ai",
+      "batch": "Winter 2025",
+      "industry": "B2B",
+      "subindustry": "Enterprise Software",
+      "location": "San Francisco, CA, USA",
+      "founded_year": 2024,
+      "team_size": 6,
+      "founders": ["Ari Example", "Bo Example"],
+      "one_liner": "Workflow AI with $1.2M ARR and 25 paying customers.",
+      "directory_url": "https://www.ycombinator.com/companies/acme-ai"
+    },
+    {
+      "id": "yc-solo",
+      "name": "Solo Robotics",
+      "website": "https://solorobotics.example",
+      "batch": "Summer 2025",
+      "industry": "Industrials",
+      "founded_year": 2025,
+      "team_size": 2,
+      "founders": ["Casey Example"],
+      "one_liner": "Small robots for warehouse inspection."
+    }
+  ]
+}
+

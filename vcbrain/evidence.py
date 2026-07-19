@@ -1,100 +1,102 @@
-"""Evidence registry: one record per source document/item (requirements §6).
-
-Also centralises the `verification_status` assignment rule from plan §2.
-Thread-safe so parallel workers can register evidence concurrently.
-"""
+"""Evidence construction and deterministic claim-level de-duplication."""
 
 from __future__ import annotations
 
-import threading
-from typing import Optional
+import hashlib
+from typing import Iterable
 
-from . import config
-from .util import source_id
+from .models import Evidence
+from .util import stable_id
 
 ALLOWED_SOURCE_TYPES = {
-    "application", "pitch_deck", "founder_interview", "financial_statement",
-    "bank_or_payment_record", "cap_table", "financing_document",
-    "company_website", "regulatory_filing", "internal_investment_record",
-    "internal_monitoring_record", "manual_research", "other",
+    "application",
+    "pitch_deck",
+    "founder_interview",
+    "financial_statement",
+    "bank_or_payment_record",
+    "cap_table",
+    "financing_document",
+    "company_website",
+    "regulatory_filing",
+    "internal_investment_record",
+    "internal_monitoring_record",
+    "manual_research",
+    "other",
 }
 ALLOWED_VERIFICATION = {
-    "independently_verified", "document_verified", "founder_reported",
-    "estimated", "unverified", "contradicted",
+    "independently_verified",
+    "document_verified",
+    "founder_reported",
+    "estimated",
+    "unverified",
+    "contradicted",
 }
 ALLOWED_CONFIDENCE = {"high", "medium", "low"}
 
-# plan §2: verification_status assignment rule, keyed by our internal channel.
-CHANNEL_VERIFICATION = {
-    "sec": "independently_verified",
-    "uspto": "independently_verified",
-    "regulatory": "independently_verified",
-    "yc": "document_verified",          # curated accelerator directory
-    "github": "document_verified",      # dated, machine-readable, verifiable
-    "hackernews": "document_verified",
-    "producthunt": "document_verified",
-    "press": "unverified",
-    "founder": "founder_reported",
-    "computed": "estimated",            # any of our derived axes/scores
-    "llm": "estimated",
-}
 
+def make_evidence(
+    *,
+    startup_id: str,
+    channel: str,
+    source_type: str,
+    document_name: str,
+    excerpt: str,
+    collected_at: str,
+    source_uri: str | None = None,
+    document_date: str | None = None,
+    location: str | None = None,
+    verification_status: str = "unverified",
+    confidence: str = "low",
+    raw_content: str | bytes | None = None,
+) -> Evidence:
+    """Build an immutable evidence record whose ID includes the claim date/content.
 
-class EvidenceRegistry:
-    """Collects evidence records and hands back stable source_ids."""
+    Including the date prevents live and historical claims from overwriting one
+    another, a subtle source of point-in-time leakage in the earlier prototype.
+    """
+    if source_type not in ALLOWED_SOURCE_TYPES:
+        source_type = "other"
+    if verification_status not in ALLOWED_VERIFICATION:
+        verification_status = "unverified"
+    if confidence not in ALLOWED_CONFIDENCE:
+        confidence = "low"
+    clean_excerpt = " ".join((excerpt or "").split())[:1000]
+    content_hash = None
+    if raw_content is not None:
+        raw_bytes = raw_content if isinstance(raw_content, bytes) else raw_content.encode("utf-8")
+        content_hash = hashlib.sha256(raw_bytes).hexdigest()
+    source_id = stable_id(
+        "source",
+        startup_id,
+        channel,
+        source_uri or document_name,
+        document_date or "undated",
+        clean_excerpt,
+    )
+    return Evidence(
+        source_id=source_id,
+        startup_id=startup_id,
+        source_type=source_type,
+        document_name=document_name,
+        source_uri=source_uri,
+        document_date=document_date,
+        collected_at=collected_at,
+        location=location,
+        evidence_excerpt=clean_excerpt,
+        verification_status=verification_status,
+        confidence=confidence,
+        channel=channel,
+        content_hash=content_hash,
+    )
 
-    def __init__(self):
-        self._records: dict[str, dict] = {}
-        self._lock = threading.Lock()
-
-    def add(
-        self,
-        *,
-        startup_id: str,
-        channel: str,
-        source_type: str,
-        document_name: str,
-        excerpt: str,
-        source_uri: Optional[str] = None,
-        document_date: Optional[str] = None,
-        location: Optional[str] = None,
-        confidence: str = "medium",
-        verification_status: Optional[str] = None,
-    ) -> str:
-        """Register one evidence item; returns its source_id (deduped by content)."""
-        if source_type not in ALLOWED_SOURCE_TYPES:
-            source_type = "other"
-        if verification_status is None:
-            verification_status = CHANNEL_VERIFICATION.get(channel, "unverified")
-        if verification_status not in ALLOWED_VERIFICATION:
-            verification_status = "unverified"
-        if confidence not in ALLOWED_CONFIDENCE:
-            confidence = "low"
-
-        sid = source_id(startup_id, channel, document_name, excerpt[:80])
-        rec = {
-            "source_id": sid,
-            "startup_id": startup_id,
-            "source_type": source_type,
-            "document_name": document_name,
-            "source_uri": source_uri,
-            "document_date": document_date,
-            "collected_at": config.now_iso(),
-            "location": location,
-            "evidence_excerpt": excerpt[:600],
-            "verification_status": verification_status,
-            "confidence": confidence,
-            "_channel": channel,  # internal; stripped on write
-        }
-        with self._lock:
-            self._records[sid] = rec
-        return sid
-
-    def records(self) -> list[dict]:
-        with self._lock:
-            out = []
-            for r in self._records.values():
-                r = dict(r)
-                r.pop("_channel", None)
-                out.append(r)
-            return out
+def dedupe_evidence(records: Iterable[Evidence]) -> list[Evidence]:
+    unique = {record.source_id: record for record in records}
+    return sorted(
+        unique.values(),
+        key=lambda item: (
+            item.startup_id,
+            item.document_date or "9999-99-99",
+            item.channel or "",
+            item.source_id,
+        ),
+    )

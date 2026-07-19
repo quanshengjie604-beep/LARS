@@ -1,300 +1,399 @@
-"""Assemble handover records from enriched signals + §5 scores.
-
-Two record kinds share one feature-snapshot builder:
-  * inference request  — observation_date = today, cutoff = today (live signals)
-  * training snapshot  — observation_date = YC batch date, cutoff = batch date
-                         (point-in-time filtered; leakage-prone fields nulled)
-
-Training outcome labels are derived from the YC directory `status`
-(Active/Acquired/Public/Inactive), which is collected *after* the cutoff.
-"""
+"""Leakage-aware feature snapshots and outcome labels."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import date
-from typing import Optional
+import json
+from dataclasses import dataclass
+from datetime import date, timedelta
+from typing import Any, Iterable, Mapping
 
+from .context import CohortContext
+from .evidence import make_evidence
+from .models import Company, Evidence, FundingRound
+from .postprocess import apply_latest_disclosures, recompute_missing_fields
 from . import scoring
-from .config import TODAY
-from .context import MarketContext
-from .evidence import EvidenceRegistry
-from .sources import github as gh_src
-from .sources import hackernews as hn_src
-from .sources import llm as llm_src
-from .sources import producthunt as ph_src
-from .util import (days_between, opportunity_id, parse_date, snapshot_id)
+from .util import parse_date, stable_id
 
-_YC_STAGE_TO_ENUM = {"Early": "seed", "Growth": "series_b", "Public": "series_c_plus"}
-
-
-@dataclass
-class RawBundle:
-    """All network I/O for one company, fetched once (this is what parallelises)."""
-
-    github: gh_src.GithubRaw = field(default_factory=gh_src.GithubRaw)
-    hn_hits: list = field(default_factory=list)
-    ph_live: ph_src.PHSignals = field(default_factory=ph_src.PHSignals)
-    llm: llm_src.LLMEstimates = field(default_factory=llm_src.LLMEstimates)
-    errors: list = field(default_factory=list)
+FEATURE_FIELDS = (
+    "founder_score_persistent", "founder_axis", "founder_axis_trend", "market_axis",
+    "market_axis_trend", "idea_vs_market", "idea_vs_market_trend", "arr_usd",
+    "revenue_growth_rate_yoy", "customer_count", "churn_rate_annual",
+    "burn_rate_usd_monthly", "runway_months", "current_stage", "last_round_size_usd",
+    "last_round_date", "total_funding_to_date_usd", "cash_balance_usd",
+    "founder_prior_exits", "founder_prior_startups", "single_founder_flag", "team_size",
+    "technical_founder_flag", "founder_industry_experience_years", "proprietary_score",
+    "patent_count", "open_source_activity_score", "tam_usd", "competitor_density",
+    "sector", "geography", "funding_climate_index", "public_footprint_score",
+    "network_centrality", "soft_skill_estimate",
+)
 
 
-def fetch_raw(company, *, use_github=True, use_llm=True) -> RawBundle:
-    """Perform all fetches for a company. Never raises; records errors instead."""
-    b = RawBundle()
-    if use_github:
-        try:
-            b.github = gh_src.fetch(company)
-        except Exception as e:  # defensive: one source must not sink the record
-            b.errors.append(f"github: {e!r}")
-    try:
-        b.hn_hits = hn_src.fetch(company)
-    except Exception as e:
-        b.errors.append(f"hn: {e!r}")
-    try:
-        b.ph_live = ph_src.enrich(company)
-    except Exception as e:
-        b.errors.append(f"producthunt: {e!r}")
-    if use_llm:
-        try:
-            b.llm = llm_src.enrich(company)
-        except Exception as e:
-            b.errors.append(f"llm: {e!r}")
-    return b
+@dataclass(slots=True)
+class SnapshotBuild:
+    record: dict[str, Any]
+    axes: dict[str, float | str | None]
+    evidence: list[Evidence]
 
 
-def _collect_null_paths(obj, prefix, out):
-    for k, v in obj.items():
-        path = f"{prefix}.{k}" if prefix else k
-        if isinstance(v, dict):
-            _collect_null_paths(v, path, out)
-        elif v is None:
-            out.append(path)
+def _eligible_source_ids(
+    source_ids: Iterable[str], evidence_by_id: Mapping[str, Evidence], cutoff: date
+) -> list[str]:
+    eligible: list[str] = []
+    for source_id in source_ids:
+        evidence = evidence_by_id.get(source_id)
+        if evidence is None:
+            continue
+        document_date = parse_date(evidence.document_date)
+        if document_date is not None and document_date <= cutoff:
+            eligible.append(source_id)
+    return sorted(set(eligible))
 
 
-@dataclass
-class SnapshotResult:
-    features: dict
-    axes: dict            # raw axis values for trend computation
-    source_ids: list
-
-
-def build_feature_snapshot(
-    company,
-    raw: RawBundle,
-    ev: EvidenceRegistry,
-    ctx: MarketContext,
+def _score_evidence(
+    company: Company,
     *,
-    observation_date: str,
-    cutoff_date: str,
+    field: str,
+    score: scoring.Score,
+    cutoff: date,
+    collected_at: str,
+) -> Evidence | None:
+    if score.value is None:
+        return None
+    excerpt = json.dumps(
+        {
+            "field": field,
+            "formula": score.formula,
+            "value": round(score.value, 6),
+            "coverage": round(score.coverage, 6),
+            "inputs": score.inputs,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return make_evidence(
+        startup_id=company.startup_id,
+        channel="computed",
+        source_type="internal_investment_record",
+        document_name=f"Derived {field} ({score.formula})",
+        excerpt=excerpt,
+        source_uri=None,
+        document_date=cutoff.isoformat(),
+        collected_at=collected_at,
+        location=field,
+        verification_status="estimated",
+        confidence=score.confidence,
+    )
+
+
+def _stage_from_round(round_: FundingRound | None) -> str:
+    stage = round_.stage if round_ else None
+    return stage if stage in {"pre_seed", "seed", "series_a", "series_b", "series_c_plus"} else "unknown"
+
+
+def build_snapshot(
+    company: Company,
+    *,
+    cutoff: date,
     live: bool,
-    prior_axes: Optional[dict] = None,
-) -> SnapshotResult:
-    """Build one nested feature snapshot dict (no ids/screening-trends yet)."""
-    sid = company.startup_id
-    cutoff = parse_date(cutoff_date)
-    cutoff_year = cutoff.year if cutoff else None
-    source_ids: list[str] = []
+    rounds: Iterable[FundingRound],
+    evidence: Iterable[Evidence],
+    signals: Mapping[str, Any],
+    context: CohortContext,
+    disclosures: Iterable[Mapping[str, Any]],
+    collected_at: str,
+    previous_axes: Mapping[str, float | str | None] | None = None,
+) -> SnapshotBuild:
+    evidence_list = list(evidence)
+    evidence_by_id = {item.source_id: item for item in evidence_list}
+    field_sources: dict[str, list[str]] = {}
+    feature_quality: dict[str, dict[str, Any]] = {}
+    contradicted_fields: set[str] = set()
 
-    def reg(**kw):
-        source_ids.append(ev.add(startup_id=sid, **kw))
+    company_sources = _eligible_source_ids(company.source_ids, evidence_by_id, cutoff)
+    eligible_rounds: list[tuple[FundingRound, list[str]]] = []
+    for round_ in rounds:
+        round_date = parse_date(round_.date)
+        if round_date is None or round_date > cutoff:
+            continue
+        eligible = _eligible_source_ids(round_.source_ids, evidence_by_id, cutoff)
+        if eligible:
+            eligible_rounds.append((round_, eligible))
+    eligible_rounds.sort(key=lambda item: (item[0].date, item[0].round_id))
+    last_pair = eligible_rounds[-1] if eligible_rounds else None
+    last_round = last_pair[0] if last_pair else None
 
-    # --- directory evidence (always) ---
-    reg(channel="yc", source_type="internal_investment_record",
-        document_name=f"YC directory: {company.name}",
-        excerpt=(company.one_liner or company.description or company.name)[:300]
-        + f" | batch={company.batch}, status={company.yc_status}, stage={company.yc_stage}.",
-        source_uri=company.directory_url, document_date=company.founding_date,
-        verification_status="document_verified", confidence="high")
+    record: dict[str, Any] = {field: None for field in FEATURE_FIELDS}
+    record.update(
+        founder_axis_trend="unknown",
+        market_axis="unknown",
+        market_axis_trend="unknown",
+        idea_vs_market_trend="unknown",
+        current_stage=_stage_from_round(last_round),
+    )
+    if last_pair:
+        record["last_round_date"] = last_round.date
+        record["last_round_size_usd"] = None if last_round.contradicted else last_round.amount_usd
+        field_sources["last_round_date"] = last_pair[1]
+        if record["last_round_size_usd"] is not None:
+            field_sources["last_round_size_usd"] = last_pair[1]
+        if last_round.contradicted:
+            contradicted_fields.add("last_round_size_usd")
 
-    # --- source signals (point-in-time filtered) ---
-    gh = gh_src.signals(raw.github, cutoff)
-    hn = hn_src.signals(raw.hn_hits, cutoff)
-    ph = raw.ph_live  # PH aggregate signal (launch-dated; treated as footprint proxy)
-    for sig, ch, stype in ((gh, "github", "company_website"), (hn, "hackernews", "other"), (ph, "producthunt", "other")):
-        if getattr(sig, "available", False):
-            for excerpt, uri, ddate in sig.evidence:
-                reg(channel=ch, source_type=stype, document_name=f"{ch}:{company.name}",
-                    excerpt=excerpt, source_uri=uri, document_date=ddate, confidence="medium")
+    equity_rounds = [pair for pair in eligible_rounds if pair[0].instrument not in {"debt", "grant"}]
+    if equity_rounds and all(pair[0].amount_usd is not None and not pair[0].contradicted for pair in equity_rounds):
+        record["total_funding_to_date_usd"] = sum(float(pair[0].amount_usd or 0) for pair in equity_rounds)
+        if record["total_funding_to_date_usd"].is_integer():
+            record["total_funding_to_date_usd"] = int(record["total_funding_to_date_usd"])
+        field_sources["total_funding_to_date_usd"] = sorted(
+            {source_id for _, source_ids in equity_rounds for source_id in source_ids}
+        )
+    elif any(pair[0].contradicted for pair in equity_rounds):
+        contradicted_fields.add("total_funding_to_date_usd")
 
-    # --- §5.6 derived signals ---
-    oss = scoring.open_source_activity(gh)
-    foot = scoring.public_footprint(gh, hn, ph)
-    # LLM estimates only for live/inference (training would risk leakage via updated text)
-    llm = raw.llm if (live and raw.llm.available) else llm_src.LLMEstimates()
-    prop = scoring.proprietary(None, oss, llm.defensibility_rubric)
-    cd_val, n_comp = ctx.competitor_density(company, cutoff_year if not live else None)
-    comp_density = scoring.Scored(cd_val, "medium" if cd_val is not None else "low",
-                                  f"sat(n_competitors={n_comp} in '{company.subindustry or company.sector}',50)",
-                                  1.0 if cd_val is not None else 0.0)
-    climate = scoring.Scored(ctx.funding_climate_index(company), "low",
-                             "sector deals / trailing-8q peak (YC cadence proxy)", 1.0)
-    net = scoring.Scored(ctx.network_centrality(company), "low",
-                         "normalized degree centrality in YC sourcing graph (§6)", 1.0)
-    soft = scoring.Scored(llm.soft_skill_estimate, "low", "LLM rubric over public text") if llm.soft_skill_estimate is not None else scoring.Scored(None, "low")
+    # Current directory attributes have a current knowledge date. They are only
+    # admitted when their evidence itself is cutoff-eligible.
+    if company_sources:
+        record["sector"] = company.sectors[0] if company.sectors else None
+        record["geography"] = company.geography
+        if live:
+            record["team_size"] = company.team_size
+            record["single_founder_flag"] = len(company.founders) == 1 if company.founders else None
+        for field in ("sector", "geography", "team_size", "single_founder_flag"):
+            if record[field] is not None:
+                field_sources[field] = company_sources
 
-    for s in (oss, foot, prop, comp_density, climate, net):
-        if s.value is not None:
-            reg(channel="computed", source_type="manual_research",
-                document_name=f"computed:{s.note[:40]}", excerpt=f"{s.note} = {round(s.value,4)} (coverage={round(s.coverage,2)})",
-                document_date=cutoff_date, confidence=s.confidence)
-
-    # --- §5.1 / §5.2 founder scores (cold-start: mostly footprint+network) ---
-    fs = scoring.founder_score_persistent(footprint=foot, network=net, pedigree=llm.pedigree)
-    fa = scoring.founder_axis(fs=fs, fmf=llm.founder_market_fit, team_size=(company.team_size if live else None),
-                              soft=soft.value, single_founder=None)
-    # --- §5.3 market axis ---
-    tam = llm.tam_usd if live else None
-    market_enum, market_scored = scoring.market_axis(tam_usd=tam, competitor_density=comp_density, climate=climate)
-    # --- §5.4 idea-vs-market ---
-    ivm = scoring.idea_vs_market(proprietary_s=prop, competitor_density=comp_density, founder_axis_s=fa)
-
-    for s, note in ((fs, "founder_score_persistent §5.1"), (fa, "founder_axis §5.2"),
-                    (market_scored, "market_axis §5.3"), (ivm, "idea_vs_market §5.4")):
-        if s.value is not None:
-            reg(channel="computed", source_type="internal_investment_record",
-                document_name=f"axis:{note}", excerpt=f"{note}: value={round(s.value,2)}, {s.note}, coverage={round(s.coverage,2)}",
-                document_date=observation_date, confidence=s.confidence)
-
-    # --- trends (§5.5): compare to prior snapshot axes ---
-    def tr(now, key):
-        return scoring.trend(now, (prior_axes or {}).get(key))
-
-    axes = {"founder_axis": fa.value, "market_axis": market_enum if market_enum != "unknown" else None,
-            "idea_vs_market": ivm.value, "founder_score_persistent": fs.value}
-
-    # --- financials: stage/last round ---
-    if live:
-        current_stage = _YC_STAGE_TO_ENUM.get(company.yc_stage or "", "unknown")
-        last_round_date = None
-    else:
-        current_stage = "seed"                 # YC program participation at batch
-        last_round_date = company.founding_date  # the YC investment event
-
-    features = {
-        "screening": {
-            "founder_score_persistent": _r(fs.value),
-            "founder_axis": _r(fa.value),
-            "founder_axis_trend": tr(fa.value, "founder_axis"),
-            "market_axis": market_enum,
-            "market_axis_trend": tr(market_enum if market_enum != "unknown" else None, "market_axis"),
-            "idea_vs_market": _r(ivm.value),
-            "idea_vs_market_trend": tr(ivm.value, "idea_vs_market"),
-        },
-        "traction": {
-            "arr_usd": None, "revenue_growth_rate_yoy": None,
-            "customer_count": None, "churn_rate_annual": None,
-        },
-        "financials": {
-            "burn_rate_usd_monthly": None, "runway_months": None,
-            "current_stage": current_stage,
-            "last_round_size_usd": None, "last_round_date": last_round_date,
-            "total_funding_to_date_usd": None, "cash_balance_usd": None,
-        },
-        "team": {
-            "founder_prior_exits": None, "founder_prior_startups": None,
-            "single_founder_flag": None,
-            "team_size": (company.team_size if live else None),
-            "technical_founder_flag": None, "founder_industry_experience_years": None,
-            "proprietary_score": _r(prop.value, 3), "patent_count": None,
-            "open_source_activity_score": _r(oss.value, 3),
-        },
-        "market": {
-            "tam_usd": tam, "competitor_density": _r(comp_density.value, 3),
-            "sector": company.sector, "geography": company.geography,
-            "funding_climate_index": _r(climate.value, 3),
-        },
-        "cold_start": {
-            "public_footprint_score": _r(foot.value, 3),
-            "network_centrality": _r(net.value, 3),
-            "soft_skill_estimate": _r(soft.value, 3),
-        },
+    # Apply only exact, dated, definition-compatible disclosures before scoring.
+    record_for_apply = {
+        **record,
+        "startup_id": company.startup_id,
+        "data_cutoff_date": cutoff.isoformat(),
+        "contradicted_fields": sorted(contradicted_fields),
     }
-    return SnapshotResult(features=features, axes=axes, source_ids=sorted(set(source_ids)))
+    record_for_apply, applied = apply_latest_disclosures(record_for_apply, disclosures, cutoff)
+    for field in FEATURE_FIELDS:
+        record[field] = record_for_apply.get(field)
+    for audit in applied:
+        field_sources[audit["field"]] = audit["supporting_source_ids"]
 
-
-def _r(v, ndigits=2):
-    return round(v, ndigits) if isinstance(v, (int, float)) else v
-
-
-def finalize_record(company, snap: SnapshotResult, *, observation_date: str, cutoff_date: str,
-                    stage: str, include_outcome_fields: bool = False) -> dict:
-    sid = company.startup_id
-    oid = opportunity_id(sid, observation_date)
-    snap_id = snapshot_id(sid, observation_date, stage)
-    missing: list[str] = []
-    _collect_null_paths(snap.features, "", missing)
-    rec = {
-        "startup_id": sid,
-        "opportunity_id": oid,
-        "snapshot_id": snap_id,
-        "observation_date": observation_date,
-        "data_cutoff_date": cutoff_date,
-        **snap.features,
-        "source_ids": snap.source_ids,
-        "missing_fields": sorted(missing),
-        "contradicted_fields": [],
-        "_meta": {"company": company.name, "accelerator": company.accelerator,
-                  "batch": company.batch, "yc_status": company.yc_status},
+    historical_mentions = sum(
+        1
+        for item in evidence_list
+        if item.startup_id == company.startup_id
+        and item.channel in {"hackernews", "producthunt"}
+        and parse_date(item.document_date) is not None
+        and parse_date(item.document_date) <= cutoff
+    )
+    live_signals = signals if live else {}
+    oss = scoring.open_source_activity(live_signals)
+    footprint = scoring.public_footprint(live_signals, dated_mentions=historical_mentions)
+    prop = scoring.proprietary(patent_count=record["patent_count"], oss=oss)
+    network = context.network.get(company.startup_id) if live and company_sources else None
+    founder = scoring.founder_score(
+        prior_exits=record["founder_prior_exits"],
+        prior_startups=record["founder_prior_startups"],
+        experience_years=record["founder_industry_experience_years"],
+        technical=record["technical_founder_flag"],
+        pedigree=None,
+        footprint=footprint,
+        network=network,
+    )
+    founder_opportunity = scoring.founder_axis(
+        founder,
+        founder_market_fit=None,
+        team_size=record["team_size"],
+        soft_skill=record["soft_skill_estimate"],
+        single_founder=record["single_founder_flag"],
+    )
+    density = context.competitor_density(company) if record["sector"] else None
+    climate = context.funding_climate(company, cutoff) if record["sector"] else None
+    market_label, market_score = scoring.market_axis(
+        tam_usd=record["tam_usd"], competitor_density=density, funding_climate=climate
+    )
+    idea = scoring.idea_vs_market(
+        proprietary_score=prop,
+        competitor_density=density,
+        revenue_growth=record["revenue_growth_rate_yoy"],
+        churn=record["churn_rate_annual"],
+        founder_axis_score=founder_opportunity,
+    )
+    score_fields = {
+        "open_source_activity_score": oss,
+        "public_footprint_score": footprint,
+        "proprietary_score": prop,
+        "founder_score_persistent": founder,
+        "founder_axis": founder_opportunity,
+        "market_axis": market_score,
+        "idea_vs_market": idea,
     }
-    return rec
+    record.update(
+        open_source_activity_score=round(oss.value, 6) if oss.value is not None else None,
+        public_footprint_score=round(footprint.value, 6) if footprint.value is not None else None,
+        proprietary_score=round(prop.value, 6) if prop.value is not None else None,
+        network_centrality=round(network, 6) if network is not None else None,
+        founder_score_persistent=round(founder.value, 4) if founder.value is not None else None,
+        founder_axis=round(founder_opportunity.value, 4) if founder_opportunity.value is not None else None,
+        competitor_density=round(density, 6) if density is not None else None,
+        funding_climate_index=round(climate, 6) if climate is not None else None,
+        market_axis=market_label,
+        idea_vs_market=round(idea.value, 4) if idea.value is not None else None,
+    )
+    if record["network_centrality"] is not None:
+        field_sources["network_centrality"] = company_sources
+        feature_quality["network_centrality"] = {"confidence": "low", "coverage": 1.0,
+                                                   "formula": "plan-6-degree-centrality-v1"}
 
+    prior = previous_axes or {}
+    record["founder_axis_trend"] = scoring.trend(record["founder_axis"], prior.get("founder_axis"))
+    record["market_axis_trend"] = scoring.trend(record["market_axis"], prior.get("market_axis"))
+    record["idea_vs_market_trend"] = scoring.trend(record["idea_vs_market"], prior.get("idea_vs_market"))
 
-# --- outcome labels from YC directory status ------------------------------
-def build_outcomes(company, ev: EvidenceRegistry, *, snap_id: str, oid: str,
-                   observation_date: str) -> dict:
-    sid = company.startup_id
-    obs = parse_date(observation_date) or company.founding_date
-    obs_d = parse_date(observation_date) or TODAY
-    end = TODAY
-    censor_days = max(0, days_between(obs_d, end))
-    status = (company.yc_status or "Active").lower()
+    derived_evidence: list[Evidence] = []
+    for field, score in score_fields.items():
+        feature_quality[field] = {
+            "coverage": round(score.coverage, 6),
+            "confidence": score.confidence,
+            "formula": score.formula,
+        }
+        item = _score_evidence(company, field=field, score=score, cutoff=cutoff, collected_at=collected_at)
+        if item:
+            derived_evidence.append(item)
+            field_sources[field] = [item.source_id]
 
-    src = ev.add(startup_id=sid, channel="yc", source_type="internal_monitoring_record",
-                 document_name=f"YC status: {company.name}",
-                 excerpt=f"YC directory status = '{company.yc_status}' as of {end.isoformat()} "
-                         f"(observation_end). Used for outcome labelling.",
-                 source_uri=company.directory_url, document_date=end.isoformat(),
-                 verification_status="document_verified", confidence="high")
-
-    # defaults: censored / still observed
-    next_round = {"next_round_observed": False, "next_round_stage": None,
-                  "next_round_date": None, "next_round_size_usd": None,
-                  "progressed_within_24_months": None}
-    next_event = {"next_event_type": "none_observed", "next_event_date": None,
-                  "time_to_next_event_days": censor_days, "next_event_observed": False}
-    failure = {"failure_observed": False, "failure_date": None, "failure_definition": None,
-               "time_to_failure_days": censor_days, "failure_event_observed": False}
-    exit_block = {"exit_type": "no_exit_observed", "exit_date": None, "exit_verified": False,
-                  "exit_valuation_usd": None, "exit_transaction_value_usd": None,
-                  "exit_value_type": None, "exit_value_disclosed": False, "exit_value_verified": False}
-    still_observed = True
-
-    if status == "public":
-        exit_block.update(exit_type="ipo", exit_verified=True)
-    elif status == "acquired":
-        exit_block.update(exit_type="acquisition", exit_verified=True)
-    elif status == "inactive":
-        # YC "Inactive" is a curated editorial signal (stronger than a dead site),
-        # but exact shutdown date is not available -> event flagged, timing censored.
-        failure.update(failure_observed=True, failure_definition="shutdown_confirmed",
-                       failure_event_observed=True)
-        still_observed = False
-
-    return {
-        "startup_id": sid,
-        "opportunity_id": oid,
-        "snapshot_id": snap_id,
-        "next_round": next_round,
-        "next_event": next_event,
-        "failure": failure,
-        "growth": None,                 # M4: no two comparable revenue points available
-        "m4_included": False,
-        "exit": exit_block,
-        "outcome_observation_end_date": end.isoformat(),
-        "company_still_observed": still_observed,
-        "source_ids": [src],
-        "missing_fields": [p for p, v in (("exit.exit_valuation_usd", exit_block["exit_valuation_usd"]),
-                                          ("growth", None)) if v is None],
-        "contradicted_fields": [],
+    identifiers = {
+        "startup_id": company.startup_id,
+        "opportunity_id": stable_id("opportunity", company.startup_id, cutoff.isoformat()),
+        "snapshot_id": f"{company.startup_id}_{cutoff.isoformat()}_{record['current_stage']}",
+        "observation_date": cutoff.isoformat(),
+        "data_cutoff_date": cutoff.isoformat(),
+        "company_name": company.name,
+        "domain": company.domain,
+        "accelerators": company.accelerators,
     }
+    final = {
+        **identifiers,
+        **record,
+        "source_ids": sorted({source_id for values in field_sources.values() for source_id in values}),
+        "field_source_ids": {key: sorted(set(values)) for key, values in sorted(field_sources.items())},
+        "feature_quality": dict(sorted(feature_quality.items())),
+        "contradicted_fields": sorted(contradicted_fields),
+    }
+    final = recompute_missing_fields(final, FEATURE_FIELDS)
+    axes = {
+        "founder_axis": record["founder_axis"],
+        "market_axis": record["market_axis"],
+        "idea_vs_market": record["idea_vs_market"],
+    }
+    return SnapshotBuild(final, axes, derived_evidence)
+
+
+def build_training_records(
+    company: Company,
+    *,
+    rounds: Iterable[FundingRound],
+    all_evidence: Iterable[Evidence],
+    signals: Mapping[str, Any],
+    context: CohortContext,
+    disclosures: Iterable[Mapping[str, Any]],
+    as_of: date,
+    collected_at: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Evidence]]:
+    company_rounds = sorted(
+        [round_ for round_ in rounds if round_.startup_id == company.startup_id and parse_date(round_.date)],
+        key=lambda item: (item.date, item.round_id),
+    )
+    evidence_list = list(all_evidence)
+    features: list[dict[str, Any]] = []
+    outcomes: list[dict[str, Any]] = []
+    derived: list[Evidence] = []
+    prior_axes: dict[str, Any] | None = None
+    # One post-round snapshot per distinct date. Same-day entries cannot be a
+    # strictly later next round and are represented as one transition point.
+    observation_dates = sorted({round_.date for round_ in company_rounds if parse_date(round_.date) <= as_of})
+    for observation in observation_dates:
+        cutoff = parse_date(observation)
+        if cutoff is None:
+            continue
+        build = build_snapshot(
+            company,
+            cutoff=cutoff,
+            live=False,
+            rounds=company_rounds,
+            evidence=evidence_list,
+            signals=signals,
+            context=context,
+            disclosures=disclosures,
+            collected_at=collected_at,
+            previous_axes=prior_axes,
+        )
+        features.append(build.record)
+        derived.extend(build.evidence)
+        prior_axes = build.axes
+
+        next_round = next((item for item in company_rounds if parse_date(item.date) > cutoff), None)
+        censor_days = max(0, (as_of - cutoff).days)
+        next_date = parse_date(next_round.date) if next_round else None
+        progressed = (
+            (next_date - cutoff).days <= 730
+            if next_date is not None
+            else False if as_of >= cutoff + timedelta(days=730) else None
+        )
+        censor_evidence = make_evidence(
+            startup_id=company.startup_id,
+            channel="computed",
+            source_type="internal_monitoring_record",
+            document_name=f"Censoring record through {as_of.isoformat()}",
+            excerpt=(
+                f"Outcome collection window ended {as_of.isoformat()}; the company remained present "
+                "in the collected directory cohort. This is a censoring record, not proof of operations."
+            ),
+            source_uri=None,
+            document_date=as_of.isoformat(),
+            collected_at=collected_at,
+            location=build.record["snapshot_id"],
+            verification_status="estimated",
+            confidence="low",
+        )
+        derived.append(censor_evidence)
+        outcome_source_ids = [censor_evidence.source_id]
+        if next_round:
+            outcome_source_ids.extend(next_round.source_ids)
+        outcome = {
+            "startup_id": company.startup_id,
+            "opportunity_id": build.record["opportunity_id"],
+            "snapshot_id": build.record["snapshot_id"],
+            "next_round_observed": next_round is not None,
+            "next_round_stage": next_round.stage if next_round else None,
+            "next_round_date": next_round.date if next_round else None,
+            "next_round_size_usd": next_round.amount_usd if next_round and not next_round.contradicted else None,
+            "progressed_within_24_months": progressed,
+            "next_event_type": "funding_round" if next_round else "none_observed",
+            "next_event_date": next_round.date if next_round else None,
+            "time_to_next_event_days": (next_date - cutoff).days if next_date else censor_days,
+            "next_event_observed": next_round is not None,
+            "failure_observed": False,
+            "failure_date": None,
+            "failure_definition": None,
+            "time_to_failure_days": censor_days,
+            "failure_event_observed": False,
+            "revenue_start_date": None,
+            "revenue_start_usd": None,
+            "revenue_end_date": None,
+            "revenue_end_usd": None,
+            "growth_measurement_type": None,
+            "annual_growth_factor": None,
+            "m4_included": False,
+            "m4_exclusion_reason": "two_comparable_revenue_observations_not_found",
+            "exit_type": "no_exit_observed",
+            "exit_date": None,
+            "exit_verified": False,
+            "exit_valuation_usd": None,
+            "exit_transaction_value_usd": None,
+            "exit_value_type": None,
+            "exit_value_disclosed": False,
+            "exit_value_verified": False,
+            "outcome_observation_end_date": as_of.isoformat(),
+            "company_still_observed": True,
+            "source_ids": sorted(set(outcome_source_ids)),
+        }
+        outcomes.append(outcome)
+    return features, outcomes, derived

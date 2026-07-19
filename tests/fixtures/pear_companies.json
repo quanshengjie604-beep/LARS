@@ -1,0 +1,26 @@
+[
+  {
+    "id": 501,
+    "slug": "ecogrid",
+    "title": {"rendered": "EcoGrid"},
+    "link": "https://pear.vc/company/ecogrid/",
+    "modified": "2026-07-01T12:00:00",
+    "meta": {"website_url": "https://ecogrid.example", "founded_year": 2024},
+    "first_investment": [1],
+    "current_stage": [10],
+    "pear_vc_company_sector": [20],
+    "excerpt": {"rendered": "Grid intelligence for renewable power."}
+  },
+  {
+    "id": 502,
+    "slug": "acme-ai",
+    "title": {"rendered": "Acme AI"},
+    "link": "https://pear.vc/company/acme-ai/",
+    "modified": "2026-07-02T12:00:00",
+    "meta": {"website_url": "https://acme.ai", "founded_year": 2024},
+    "first_investment": [2],
+    "current_stage": [11],
+    "pear_vc_company_sector": [21]
+  }
+]
+

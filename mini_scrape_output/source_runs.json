@@ -1,0 +1,90 @@
+[
+  {
+    "cache_hits": 0,
+    "errors": [],
+    "finished_at": "2026-07-18T12:00:00Z",
+    "records": 2,
+    "requests": 1,
+    "skipped_reason": null,
+    "source": "a16z",
+    "started_at": "2026-07-18T12:00:00Z",
+    "status": "ok"
+  },
+  {
+    "cache_hits": 0,
+    "errors": [],
+    "finished_at": "2026-07-18T12:00:00Z",
+    "records": 0,
+    "requests": 0,
+    "skipped_reason": "no explicit directory-provided GitHub organization IDs",
+    "source": "github",
+    "started_at": "2026-07-18T12:00:00Z",
+    "status": "skipped"
+  },
+  {
+    "cache_hits": 0,
+    "errors": [],
+    "finished_at": "2026-07-18T12:00:00Z",
+    "records": 4,
+    "requests": 5,
+    "skipped_reason": null,
+    "source": "hackernews",
+    "started_at": "2026-07-18T12:00:00Z",
+    "status": "ok"
+  },
+  {
+    "cache_hits": 0,
+    "errors": [],
+    "finished_at": "2026-07-18T12:00:00Z",
+    "records": 2,
+    "requests": 4,
+    "skipped_reason": null,
+    "source": "pear",
+    "started_at": "2026-07-18T12:00:00Z",
+    "status": "ok"
+  },
+  {
+    "cache_hits": 0,
+    "errors": [],
+    "finished_at": "2026-07-18T12:00:00Z",
+    "records": 2,
+    "requests": 5,
+    "skipped_reason": null,
+    "source": "producthunt",
+    "started_at": "2026-07-18T12:00:00Z",
+    "status": "ok"
+  },
+  {
+    "cache_hits": 0,
+    "errors": [],
+    "finished_at": "2026-07-18T12:00:00Z",
+    "records": 0,
+    "requests": 0,
+    "skipped_reason": "no quarterly Form D ZIP paths configured",
+    "source": "sec_form_d",
+    "started_at": "2026-07-18T12:00:00Z",
+    "status": "skipped"
+  },
+  {
+    "cache_hits": 0,
+    "errors": [],
+    "finished_at": "2026-07-18T12:00:00Z",
+    "records": 2,
+    "requests": 1,
+    "skipped_reason": null,
+    "source": "startx",
+    "started_at": "2026-07-18T12:00:00Z",
+    "status": "ok"
+  },
+  {
+    "cache_hits": 0,
+    "errors": [],
+    "finished_at": "2026-07-18T12:00:00Z",
+    "records": 2,
+    "requests": 0,
+    "skipped_reason": null,
+    "source": "yc",
+    "started_at": "2026-07-18T12:00:00Z",
+    "status": "ok"
+  }
+]

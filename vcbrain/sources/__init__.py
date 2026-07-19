@@ -1,3 +1,53 @@
-"""Data-source adapters. Each returns (payload, document_date, source_uri)-style
-structured data and never raises fatally — network failures degrade to null so
-one flaky source cannot sink a whole company's record."""
+"""Directory and enrichment source adapters."""
+
+from .directories import (
+    A16Z_INVESTMENT_LIST_URL,
+    A16Z_PORTFOLIO_URL,
+    PEAR_WP_API,
+    STARTX_CONSIDER_API,
+    collect_a16z_directory,
+    collect_pear_directory,
+    collect_startx_directory,
+    collect_yc_directory,
+    fetch_a16z_directory,
+    fetch_pear_directory,
+    fetch_startx_directory,
+    load_yc_export,
+    parse_a16z_investment_list_html,
+    parse_a16z_portfolio_html,
+    parse_a16z_records,
+    parse_pear_records,
+    parse_pear_taxonomy,
+    parse_startx_page,
+    parse_startx_records,
+    parse_yc_csv,
+    parse_yc_export,
+    parse_yc_json,
+    parse_yc_records,
+)
+
+__all__ = [
+    "A16Z_INVESTMENT_LIST_URL",
+    "A16Z_PORTFOLIO_URL",
+    "PEAR_WP_API",
+    "STARTX_CONSIDER_API",
+    "collect_a16z_directory",
+    "collect_pear_directory",
+    "collect_startx_directory",
+    "collect_yc_directory",
+    "fetch_a16z_directory",
+    "fetch_pear_directory",
+    "fetch_startx_directory",
+    "load_yc_export",
+    "parse_a16z_investment_list_html",
+    "parse_a16z_portfolio_html",
+    "parse_a16z_records",
+    "parse_pear_records",
+    "parse_pear_taxonomy",
+    "parse_startx_page",
+    "parse_startx_records",
+    "parse_yc_csv",
+    "parse_yc_export",
+    "parse_yc_json",
+    "parse_yc_records",
+]

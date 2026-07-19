@@ -1,84 +1,137 @@
-# vcbrain — Screening data pipeline (list-scale)
+# vcbrain — parallel startup and funding collection
 
-Implements [`plan.md`](plan.md) over a **list of startups**, in parallel, and
-emits the `screening_handover/` JSONL contract from
-[`ngboost_data_requirements.md`](ngboost_data_requirements.md).
+This repository implements [`plan.md`](plan.md) over a **list of startups**. It discovers a
+cohort from accelerator/investor directories, resolves duplicate companies, enriches every company
+concurrently, extracts dated funding claims, builds cutoff-safe NGBoost snapshots, and runs an
+evidence-only missing-financials assessment.
 
-Instead of collecting one company at a time, it **seeds the whole cohort from an
-accelerator directory** (Y Combinator, first-class), **caps every company to
-≤ 10 years old**, then fans out per-company enrichment (GitHub, Hacker News,
-Product Hunt) across a thread pool and computes every plan §5 score.
+The implementation is deliberately conservative: cohort membership and product launches are not
+funding rounds, current directory data is not backdated, and unavailable private financials remain
+`null`.
 
-## Why these sources
+## Quick validation
 
-- **YC directory** (primary) — via the `yc-oss/api` static mirror (no auth). Rich
-  per-company records: `status` (→ outcome labels), `batch` (→ 10-year age
-  filter + point-in-time anchor), `team_size`, `industry`, `regions`.
-- **GitHub REST** — open-source footprint & activity (§5.6).
-- **Hacker News** (Algolia Search) — public footprint, date-filterable.
-- **Product Hunt** (GraphQL, optional) — launch footprint.
-
-## Run it
-
-No third-party packages required (stdlib only). From the repo root:
+The default mini scrape is network-free and deterministic. It exercises all four directory adapter
+shapes, Hacker News, Product Hunt, funding extraction, duplicate resolution, postprocessing, and the
+standalone report.
 
 ```bash
-# quick demo: 25 recent companies, GitHub off (avoids unauth rate limits)
-python -m vcbrain --limit 25 --no-github --no-llm
-
-# richer: enrich with GitHub (set a token to lift rate limits)
-export GITHUB_TOKEN=ghp_...        # optional but recommended
-python -m vcbrain --limit 100 --mode both
-
-# target a slice
-python -m vcbrain --batches "Summer 2024,Winter 2024" --sectors fintech --geographies germany
-python -m vcbrain --top-only --mode inference
+python -m vcbrain mini --output-dir mini_scrape_output
+open mini_scrape_output/scrape_report.html
 ```
 
-Output lands in `screening_handover/`:
-`training_features.jsonl`, `training_outcomes.jsonl`, `inference_requests.jsonl`,
-`evidence_registry.jsonl`, `data_dictionary.md`.
+It writes `mini_assessment.json`; a nonzero exit code means a functional or leakage check failed.
+The optional live smoke is intentionally explicit:
 
-### Optional environment variables
+```bash
+python -m vcbrain mini --live --output-dir live_mini_output
+```
 
-| Var | Effect |
+## Full collection
+
+```bash
+python -m vcbrain collect \
+  --sources a16z,pear,yc,startx \
+  --yc-export /path/to/authorised-yc-export.json \
+  --sec-form-d /path/to/sec-quarterly-zips \
+  --limit 100 \
+  --mode both \
+  --output-dir screening_handover
+```
+
+Use `--limit 0` for every discovered company. `--concurrency` controls the bounded source/company
+worker pool. Pear remains paced at 10 seconds per request by default; its waits are asynchronous, so
+other source work continues.
+
+Optional credentials are read from the environment:
+
+| Variable | Use |
 |---|---|
-| `GITHUB_TOKEN` | Higher GitHub rate limits + org followers |
-| `PRODUCTHUNT_TOKEN` | Enables Product Hunt enrichment |
-| `ANTHROPIC_API_KEY` | Enables LLM-estimated fields (`tam_usd`, soft rubrics) |
-| `VCBRAIN_TODAY` | Override the observation anchor (default `2026-07-18`) |
-| `VCBRAIN_MAX_AGE_YEARS` | Override the 10-year age cap |
+| `PRODUCTHUNT_TOKEN` | Official Product Hunt GraphQL API |
+| `STARTX_API_KEY` or `CONSIDER_API_KEY` | Authenticated StartX Consider board |
+| `GITHUB_TOKEN` | Explicit directory-linked GitHub organizations |
+| `VCBRAIN_AS_OF` | Snapshot/censoring date (`YYYY-MM-DD`) |
+| `VCBRAIN_CONCURRENCY` | Global asynchronous request/work bound |
 
-Everything degrades gracefully: no token → that source is skipped and its fields
-stay `null` (never fabricated). Successful GETs are cached under `.vcbrain_cache/`
-so reruns are free.
+### Source boundary
 
-## Key CLI flags
+- **a16z:** one public portfolio request; parses the page's `data-company` JSON and falls back to
+  the names-only investment list.
+- **Pear VC:** public WordPress REST portfolio plus taxonomy endpoints, with the declared crawl
+  delay.
+- **YC:** local authorised JSON/CSV export only. The code does not automate YC's website or internal
+  Algolia service.
+- **StartX:** authenticated Consider Boards API only. Without a key it is reported as a structured
+  skip rather than silently scraped.
+- **Hacker News:** Algolia discovery plus canonical Firebase item records.
+- **Product Hunt:** official token-gated GraphQL API. A launch is a launch; only explicit dated
+  financing language creates a low-confidence funding claim.
+- **SEC Form D:** local official quarterly ZIPs, joined once across the entire cohort. Amount sold is
+  kept distinct from the offering target.
 
-`--mode {inference,training,both}` · `--limit N` (0 = all) · `--batches` ·
-`--sectors` · `--geographies` · `--status` · `--top-only` · `--workers N` ·
-`--no-github` · `--no-llm` · `--age-years N` · `--output-dir DIR`
+## Outputs
 
-## Architecture
+The output directory contains the required handover plus audit artifacts:
 
+```text
+companies.jsonl
+funding_rounds.jsonl
+training_features.jsonl
+training_outcomes.jsonl
+inference_requests.jsonl
+evidence_registry.jsonl
+financial_disclosures.jsonl
+enrichment_queue.jsonl
+quality_report.json
+source_runs.json
+collection_summary.json
+data_dictionary.md
+scrape_report.html
 ```
-sources/{yc,github,hackernews,producthunt,llm}.py   # one adapter per source
-  yc.py       -> seed + 10-year age filter (primary directory)
-context.py    -> corpus-level §5.6/§6 signals (competitor density, climate, centrality)
-scoring.py    -> deterministic plan §5 formulas (null-drop + weight renorm)
-evidence.py   -> evidence_registry + verification_status rules
-assemble.py   -> leakage-aware feature snapshots + outcome labels
-pipeline.py   -> parallel fan-out (ThreadPoolExecutor) + JSONL writers
-cli.py        -> `python -m vcbrain`
+
+`scrape_report.html` is produced through the pure API:
+
+```python
+from vcbrain.visualize import render_html, write_html
+
+html = render_html(companies, funding_rounds, quality_report, source_runs)
+write_html(companies, funding_rounds, quality_report, source_runs, "report.html")
 ```
 
-## Point-in-time / leakage control
+It shows source health, funding by year, coverage, and a filterable funding table. Null amounts are
+shown as “not found”, never `$0`.
 
-- **Inference** snapshots use live signals as of "today".
-- **Training** snapshots anchor at the YC batch date and filter every signal to
-  `≤ cutoff`; live-only figures (current team size, star counts) are nulled.
-- **Outcomes** come from the post-cutoff YC `status` and preserve failures and
-  censored still-alive companies (§10.2), not just winners.
+## Point-in-time and financial postprocessing
 
-See the generated `screening_handover/data_dictionary.md` for full field-level
-rules and honest limitations.
+Every historical feature reference must satisfy:
+
+```text
+evidence.document_date <= snapshot.data_cutoff_date
+```
+
+Retrospective portfolio dates may support later outcome collection, but they cannot leak current
+directory contents into an earlier feature snapshot. Funding events remain plural; stage and total
+funding are derived only from cutoff-eligible claims.
+
+After snapshot assembly, `vcbrain.postprocess`:
+
+1. extracts exact, dated ARR/revenue/customer/growth/runway/burn/cash disclosures;
+2. fills a null only when the definition, currency, entity, and cutoff are compatible;
+3. refuses projections, bounds, generic users/revenue, non-USD values without FX evidence, and
+   same-date conflicts;
+4. reports coverage, staleness, contradictions, and source failures; and
+5. emits a ranked enrichment queue for fields likely requiring founder documents or vendor access.
+
+It never infers cash from a funding round, burn from headcount, runway from guessed burn, or ARR from
+traffic.
+
+## Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The suite covers all directory parsers, funding/valuation/total-raised distinctions, non-USD amounts,
+round contradictions, SEC amount-sold semantics, point-in-time disclosure filtering, deterministic
+parallel output, duplicate company resolution, unresolved evidence references, private-field nulls,
+and safe report escaping.

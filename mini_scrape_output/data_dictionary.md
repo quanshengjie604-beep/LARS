@@ -1,15 +1,6 @@
-"""Generated handover documentation."""
+# Screening handover data dictionary
 
-from __future__ import annotations
-
-from datetime import date
-
-
-def render_data_dictionary(*, as_of: date, sources: list[str]) -> str:
-    source_text = ", ".join(sources) if sources else "none"
-    return f"""# Screening handover data dictionary
-
-Generated as of `{as_of.isoformat()}` from configured sources: {source_text}.
+Generated as of `2026-07-18` from configured sources: a16z, hackernews, pear, producthunt, startx, yc.
 
 ## Point-in-time contract
 
@@ -71,4 +62,3 @@ Postprocessing may fill a null only from an explicit, dated, definition-compatib
 before the cutoff. Projections, TAM, approximate bounds, generic users, generic revenue, and non-USD
 amounts without FX evidence never populate canonical fields. The enrichment queue recommends founder
 documents, financial statements, regulatory filings, or primary press rather than inventing values.
-"""

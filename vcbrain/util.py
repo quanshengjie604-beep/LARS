@@ -1,4 +1,4 @@
-"""Small pure helpers: §5 math primitives, weighted-present averaging, ids, dates."""
+"""Pure normalization, identifier, date, and scoring helpers."""
 
 from __future__ import annotations
 
@@ -7,148 +7,194 @@ import math
 import re
 import unicodedata
 from datetime import date, datetime, timezone
-from typing import Iterable, Optional
+from decimal import Decimal, InvalidOperation
+from typing import Any, Iterable, Mapping, Sequence
+from urllib.parse import urlsplit, urlunsplit
+
+SHARED_HOSTS = {
+    "facebook.com",
+    "github.com",
+    "instagram.com",
+    "linkedin.com",
+    "linktr.ee",
+    "medium.com",
+    "notion.site",
+    "twitter.com",
+    "x.com",
+}
 
 
-# --- §5 math helpers ------------------------------------------------------
-def clamp(x: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, x))
+def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
+    return max(low, min(high, value))
 
 
-def nlog(x: float, lo: float, hi: float) -> float:
-    """Log-scale a positive money/count value into [0, 1] between decades lo..hi."""
-    return clamp((math.log10(max(x, 1)) - lo) / (hi - lo), 0.0, 1.0)
+def sat(value: float, ceiling: float) -> float:
+    return clamp(value / ceiling) if ceiling > 0 else 0.0
 
 
-def sat(x: float, k: float) -> float:
-    """Saturating count: x/k clamped to [0, 1]; k is the saturation point."""
-    return clamp(x / k, 0.0, 1.0)
+def nlog(value: float, low_power: float, high_power: float) -> float:
+    if high_power <= low_power:
+        raise ValueError("high_power must exceed low_power")
+    return clamp((math.log10(max(value, 1.0)) - low_power) / (high_power - low_power))
 
 
-def weighted_present(pairs: Iterable[tuple[Optional[float], float]]) -> tuple[Optional[float], float, int, int]:
-    """Weighted average that DROPS null inputs and renormalizes remaining weights.
-
-    A missing input widens uncertainty; it never scores as zero (plan §5).
-
-    Returns (value_or_None, coverage_fraction, n_present, n_total) where
-    coverage = present_weight / total_weight. Callers lower confidence in
-    proportion to how many inputs were null.
-    """
-    total_w = 0.0
-    present_w = 0.0
-    acc = 0.0
-    n_present = 0
-    n_total = 0
-    for val, w in pairs:
-        n_total += 1
-        total_w += w
-        if val is None:
+def weighted_present(
+    components: Iterable[tuple[float | None, float]],
+) -> tuple[float | None, float]:
+    """Return a null-dropping weighted mean and input-weight coverage."""
+    present_weight = 0.0
+    total_weight = 0.0
+    weighted_sum = 0.0
+    for value, weight in components:
+        total_weight += weight
+        if value is None:
             continue
-        acc += val * w
-        present_w += w
-        n_present += 1
-    if present_w == 0:
-        return None, 0.0, 0, n_total
-    coverage = present_w / total_w if total_w else 0.0
-    return acc / present_w, coverage, n_present, n_total
+        present_weight += weight
+        weighted_sum += value * weight
+    if not present_weight:
+        return None, 0.0
+    return weighted_sum / present_weight, present_weight / total_weight if total_weight else 0.0
 
 
-def mean_present(values: Iterable[Optional[float]]) -> Optional[float]:
-    vals = [v for v in values if v is not None]
-    if not vals:
+def mean_present(values: Iterable[float | None]) -> float | None:
+    present = [value for value in values if value is not None]
+    return sum(present) / len(present) if present else None
+
+
+def slugify(value: str) -> str:
+    ascii_value = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", ascii_value.lower()).strip("-") or "unknown"
+
+
+def normalized_name(value: str) -> str:
+    value = unicodedata.normalize("NFKC", value or "").casefold()
+    value = re.sub(r"\b(?:incorporated|inc|llc|ltd|limited|corp|corporation|company|co)\b", " ", value)
+    return re.sub(r"[^a-z0-9]+", "", value)
+
+
+def normalize_url(value: str | None) -> str | None:
+    if not value:
         return None
-    return sum(vals) / len(vals)
-
-
-def confidence_from_coverage(coverage: float, base: str = "medium") -> str:
-    """Map an input-coverage fraction to a confidence label."""
-    if coverage >= 0.75:
-        return "high" if base != "low" else "medium"
-    if coverage >= 0.4:
-        return "medium" if base != "low" else "low"
-    return "low"
-
-
-# --- ids ------------------------------------------------------------------
-def stable_hash(*parts: str) -> str:
-    h = hashlib.sha1("::".join(str(p) for p in parts).encode("utf-8")).hexdigest()
-    return h[:12]
-
-
-def startup_id(name: str, domain: Optional[str] = None) -> str:
-    key = (domain or "").strip().lower() or slugify(name)
-    return "startup_" + stable_hash("startup", key)
-
-
-def opportunity_id(sid: str, observation_date: str) -> str:
-    return "opportunity_" + stable_hash("opp", sid, observation_date)
-
-
-def snapshot_id(sid: str, observation_date: str, stage: str) -> str:
-    return f"{sid}_{observation_date}_{stage or 'unknown'}"
-
-
-def source_id(*parts: str) -> str:
-    return "source_" + stable_hash("source", *[str(p) for p in parts])
-
-
-# --- text/normalisation ---------------------------------------------------
-def slugify(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
-    text = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return text or "unknown"
-
-
-def domain_of(url: Optional[str]) -> Optional[str]:
-    if not url:
-        return None
-    m = re.match(r"^\s*(?:https?://)?(?:www\.)?([^/\s?#]+)", url)
-    if not m:
-        return None
-    return m.group(1).lower()
-
-
-# --- dates ----------------------------------------------------------------
-def epoch_to_date(ts: Optional[int]) -> Optional[str]:
-    if not ts:
-        return None
+    candidate = value.strip()
+    if not re.match(r"^https?://", candidate, re.I):
+        candidate = "https://" + candidate
     try:
-        return datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat()
-    except (ValueError, OverflowError, OSError):
-        return None
-
-
-def parse_date(s: Optional[str]) -> Optional[date]:
-    if not s:
-        return None
-    s = s.strip()
-    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except ValueError:
-            continue
-    # last resort: leading 10 chars
-    try:
-        return date.fromisoformat(s[:10])
+        parts = urlsplit(candidate)
     except ValueError:
         return None
+    if parts.scheme.lower() not in {"http", "https"} or not parts.hostname:
+        return None
+    host = parts.hostname.casefold().removeprefix("www.")
+    port = f":{parts.port}" if parts.port and parts.port not in {80, 443} else ""
+    path = re.sub(r"/{2,}", "/", parts.path or "").rstrip("/")
+    return urlunsplit((parts.scheme.lower(), host + port, path, parts.query, ""))
 
 
-def days_between(a: date, b: date) -> int:
-    return (b - a).days
+def domain_of(value: str | None, *, allow_shared: bool = False) -> str | None:
+    normalized = normalize_url(value)
+    if not normalized:
+        return None
+    host = (urlsplit(normalized).hostname or "").casefold().removeprefix("www.")
+    if not allow_shared and host in SHARED_HOSTS:
+        return None
+    return host or None
 
 
-# YC batch -> approximate (start_date, founding_year). Batches: "Summer 2024",
-# "Winter 2024", "Spring 2024", "Fall 2024".
-_SEASON_MONTH = {"winter": "01", "spring": "03", "summer": "06", "fall": "09"}
+def stable_id(prefix: str, *parts: object, length: int = 16) -> str:
+    payload = "\x1f".join(str(part).strip() for part in parts)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:length]
+    return f"{prefix}_{digest}"
 
 
-def batch_to_date(batch: Optional[str]) -> tuple[Optional[str], Optional[int]]:
-    if not batch:
+def parse_date(value: Any) -> date | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if re.fullmatch(r"\d{4}", text):
+        return None  # do not invent month/day precision
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        pass
+    for fmt in ("%B %d, %Y", "%b %d, %Y", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def iso_date(value: Any) -> str | None:
+    parsed = parse_date(value)
+    return parsed.isoformat() if parsed else None
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def parse_batch(value: str | None) -> tuple[int | None, str | None]:
+    """Return cohort year and precision without fabricating a funding/founding day."""
+    if not value:
         return None, None
-    m = re.match(r"([A-Za-z]+)\s+(\d{4})", batch.strip())
-    if not m:
-        return None, None
-    season, year = m.group(1).lower(), int(m.group(2))
-    month = _SEASON_MONTH.get(season, "01")
-    return f"{year}-{month}-01", year
+    match = re.search(r"\b(20\d{2})\b", value)
+    return (int(match.group(1)), "year") if match else (None, None)
+
+
+_MULTIPLIER = {
+    "": Decimal("1"),
+    "k": Decimal("1000"),
+    "thousand": Decimal("1000"),
+    "m": Decimal("1000000"),
+    "mm": Decimal("1000000"),
+    "million": Decimal("1000000"),
+    "b": Decimal("1000000000"),
+    "bn": Decimal("1000000000"),
+    "billion": Decimal("1000000000"),
+}
+
+
+def scaled_number(number: str, suffix: str = "") -> int | float | None:
+    try:
+        raw = Decimal(number.replace(",", "")) * _MULTIPLIER[suffix.casefold().strip()]
+    except (InvalidOperation, KeyError):
+        return None
+    return int(raw) if raw == raw.to_integral_value() else float(raw)
+
+
+def unique_sorted(values: Iterable[str | None]) -> list[str]:
+    return sorted({value.strip() for value in values if value and value.strip()}, key=str.casefold)
+
+
+def json_ready(value: Any) -> Any:
+    """Recursively convert dataclasses/date/tuples into deterministic JSON values."""
+    from dataclasses import asdict, is_dataclass
+
+    if is_dataclass(value):
+        return json_ready(asdict(value))
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, Mapping):
+        return {str(key): json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [json_ready(item) for item in value]
+    return value
+
+
+def deep_get(record: Mapping[str, Any], path: str, default: Any = None) -> Any:
+    current: Any = record
+    for part in path.split("."):
+        if not isinstance(current, Mapping):
+            return default
+        current = current.get(part, default)
+    return current
+
+
+def date_sort_key(value: str | None) -> tuple[int, str]:
+    return (0, value) if value else (1, "")

@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "id": "startx-rocket",
+      "attributes": {
+        "name": "RocketOps",
+        "domain": "rocketops.io",
+        "description": "Operations software for space teams.",
+        "markets": ["Enterprise", "Aerospace"],
+        "staffCount": 8,
+        "founded_year": 2024,
+        "funding": "Seed"
+      },
+      "links": {"html": "https://jobs.startx.com/companies/rocketops"}
+    },
+    {
+      "id": "startx-acme",
+      "attributes": {
+        "name": "Acme AI, Inc.",
+        "domain": "acme.ai",
+        "description": "AI workflow automation.",
+        "markets": ["Enterprise"],
+        "staffCount": 7,
+        "founded_year": 2024
+      }
+    }
+  ],
+  "links": {"next": null}
+}
+

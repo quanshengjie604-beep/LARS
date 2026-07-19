@@ -1,0 +1,8 @@
+{
+  "1001": {"id": 1001, "time": 1749988800, "title": "Acme AI raises $5M seed round", "url": "https://news.example/acme-round"},
+  "1002": {"id": 1002, "time": 1755691200, "title": "Nova Health secures $12 million Series A", "url": "https://news.example/nova-round"},
+  "1003": {"id": 1003, "time": 1741089600, "title": "Launch HN: RocketOps – operations software for space teams", "url": "https://rocketops.io"},
+  "1004": {"id": 1004, "time": 1762344000, "title": "EcoGrid raises €3M seed financing", "url": "https://news.example/ecogrid-round"},
+  "1005": {"id": 1005, "time": 1764590400, "title": "Unrelated Corp raises $90M", "url": "https://news.example/unrelated"}
+}
+

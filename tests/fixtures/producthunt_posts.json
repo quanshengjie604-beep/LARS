@@ -1,0 +1,9 @@
+{
+  "https://acme.ai": [
+    {"id": "ph1", "slug": "acme-ai", "name": "Acme AI", "tagline": "Automate work with reliable AI", "description": "A workflow launch, not a financing announcement.", "website": "https://acme.ai", "url": "https://www.producthunt.com/posts/acme-ai", "createdAt": "2025-02-01T08:00:00Z", "featuredAt": "2025-02-01T10:00:00Z", "votesCount": 340, "commentsCount": 42}
+  ],
+  "https://rocketops.io": [
+    {"id": "ph2", "slug": "rocketops", "name": "RocketOps", "tagline": "Space operations control", "description": "RocketOps raises $4M pre-seed financing.", "website": "https://rocketops.io", "url": "https://www.producthunt.com/posts/rocketops", "createdAt": "2025-04-10T08:00:00Z", "featuredAt": null, "votesCount": 120, "commentsCount": 17}
+  ]
+}
+

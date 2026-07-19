@@ -1,113 +1,84 @@
-"""Corpus-level derived quantities computed once over the whole seed cohort.
-
-These are the §5 inputs that need cross-company context rather than a single
-company's own data:
-  * competitor_density   — company count in the same category
-  * funding_climate_index — deal-volume-per-quarter proxy from batch cadence
-  * network_centrality   — degree centrality in the sourcing graph (§6)
-
-All are point-in-time aware: pass a cutoff to restrict to companies knowable then.
-"""
+"""Cohort-level market and sourcing-graph context."""
 
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import Optional
+from collections import Counter, defaultdict
+from datetime import date
+from typing import Iterable
 
-from .util import batch_to_date, clamp, sat
-
-# Batch season -> ordinal quarter index within a year (for climate cadence).
-_SEASON_Q = {"winter": 1, "spring": 2, "summer": 3, "fall": 4}
+from .models import Company, FundingRound
+from .util import clamp, parse_date, sat
 
 
-class MarketContext:
-    def __init__(self, companies: list):
-        self._companies = companies
-        # category -> list of (founding_year, name)
-        self._by_category: dict[str, list] = defaultdict(list)
-        # (year, season) -> count  (deal-volume-per-quarter proxy)
-        self._batch_counts: dict[tuple, int] = defaultdict(int)
-        for c in companies:
-            cat = self._category(c)
-            self._by_category[cat].append((c.founding_year, c.name))
-            q = self._quarter_key(c.batch)
-            if q:
-                self._batch_counts[q] += 1
-        self._centrality = self._compute_centrality(companies)
+class CohortContext:
+    def __init__(self, companies: Iterable[Company], rounds: Iterable[FundingRound]):
+        self.companies = list(companies)
+        self.rounds = list(rounds)
+        self.sector_counts = Counter(
+            sector.casefold() for company in self.companies for sector in company.sectors if sector
+        )
+        self.company_sectors = {
+            company.startup_id: [sector.casefold() for sector in company.sectors] for company in self.companies
+        }
+        self.network = self._network_scores()
 
-    # --- categorisation ---
-    @staticmethod
-    def _category(c) -> str:
-        return (c.subindustry or c.sector or "unknown").strip().lower()
+    def competitor_density(self, company: Company) -> float | None:
+        counts = [self.sector_counts[sector.casefold()] for sector in company.sectors if sector]
+        return sat(float(max(counts)), 50) if counts else None
 
     @staticmethod
-    def _quarter_key(batch: Optional[str]):
-        if not batch:
+    def _quarter(value: date) -> tuple[int, int]:
+        return value.year, (value.month - 1) // 3 + 1
+
+    def funding_climate(self, company: Company, cutoff: date) -> float | None:
+        sectors = {sector.casefold() for sector in company.sectors if sector}
+        if not sectors:
             return None
-        parts = batch.strip().split()
-        if len(parts) != 2 or not parts[1].isdigit():
-            return None
-        season = parts[0].lower()
-        return (int(parts[1]), _SEASON_Q.get(season, 1))
+        counts: Counter[tuple[int, int]] = Counter()
+        for round_ in self.rounds:
+            event_date = parse_date(round_.date)
+            if event_date is None or event_date > cutoff:
+                continue
+            if not sectors.intersection(self.company_sectors.get(round_.startup_id, [])):
+                continue
+            counts[self._quarter(event_date)] += 1
+        current = self._quarter(cutoff)
+        trailing: list[int] = []
+        year, quarter = current
+        for offset in range(8):
+            absolute = year * 4 + quarter - 1 - offset
+            trailing.append(counts[(absolute // 4, absolute % 4 + 1)])
+        peak = max(trailing) if trailing else 0
+        return clamp(trailing[0] / peak) if peak else None
 
-    # --- §5.6 competitor_density = sat(n_competitors_in_category, 50) ---
-    def competitor_density(self, c, cutoff_year: Optional[int] = None) -> tuple[Optional[float], int]:
-        cat = self._category(c)
-        peers = self._by_category.get(cat, [])
-        if cutoff_year is not None:
-            n = sum(1 for (fy, name) in peers if fy is not None and fy <= cutoff_year and name != c.name)
-        else:
-            n = sum(1 for (fy, name) in peers if name != c.name)
-        if not peers:
-            return None, 0
-        return sat(n, 50), n
-
-    # --- §5.6 funding_climate_index (per-quarter, trailing-8q normalised) ---
-    def funding_climate_index(self, c) -> Optional[float]:
-        key = self._quarter_key(c.batch)
-        if not key:
-            return None
-        this_q = self._batch_counts.get(key, 0)
-        # trailing 8 quarters strictly before this one
-        year, q = key
-        trailing = []
-        yy, qq = year, q
-        for _ in range(8):
-            qq -= 1
-            if qq == 0:
-                qq = 4
-                yy -= 1
-            trailing.append(self._batch_counts.get((yy, qq), 0))
-        peak = max(trailing + [this_q]) or 1
-        return clamp(this_q / peak, 0.0, 1.0)
-
-    # --- §6 sourcing graph: degree centrality ---
-    def _compute_centrality(self, companies: list) -> dict[str, float]:
-        """Nodes = companies; connected when they share a batch or a category.
-
-        Degree = size of the union of a company's batch-mates and category-mates.
-        Min-max normalised to [0, 1]. A cheap, deterministic first pass at the
-        eigenvector-centrality intent of plan §6.
-        """
-        batch_members: dict[str, set] = defaultdict(set)
-        cat_members: dict[str, set] = defaultdict(set)
-        for c in companies:
-            if c.batch:
-                batch_members[c.batch].add(c.name)
-            cat_members[self._category(c)].add(c.name)
-        raw: dict[str, float] = {}
-        for c in companies:
-            neighbours: set = set()
-            if c.batch:
-                neighbours |= batch_members[c.batch]
-            neighbours |= cat_members[self._category(c)]
-            neighbours.discard(c.name)
-            raw[c.name] = float(len(neighbours))
-        if not raw:
-            return {}
-        lo, hi = min(raw.values()), max(raw.values())
-        span = (hi - lo) or 1.0
-        return {name: (v - lo) / span for name, v in raw.items()}
-
-    def network_centrality(self, c) -> Optional[float]:
-        return self._centrality.get(c.name)
+    def _network_scores(self) -> dict[str, float | None]:
+        """Low-confidence normalized degree over founder/company/accelerator edges."""
+        graph: dict[str, set[str]] = defaultdict(set)
+        founder_by_company: dict[str, list[str]] = {}
+        for company in self.companies:
+            company_node = "company:" + company.startup_id
+            founders: list[str] = []
+            for founder in company.founders:
+                founder_node = "founder:" + founder.casefold().strip()
+                graph[founder_node].add(company_node)
+                graph[company_node].add(founder_node)
+                founders.append(founder_node)
+            founder_by_company[company.startup_id] = founders
+            for accelerator in company.accelerators:
+                accelerator_node = "accelerator:" + accelerator.casefold().strip()
+                graph[company_node].add(accelerator_node)
+                graph[accelerator_node].add(company_node)
+        founder_degrees = {node: len(neighbors) for node, neighbors in graph.items() if node.startswith("founder:")}
+        if not founder_degrees:
+            return {company.startup_id: None for company in self.companies}
+        low, high = min(founder_degrees.values()), max(founder_degrees.values())
+        scores: dict[str, float | None] = {}
+        for company in self.companies:
+            values = [founder_degrees[node] for node in founder_by_company[company.startup_id]]
+            if not values:
+                scores[company.startup_id] = None
+            elif high == low:
+                scores[company.startup_id] = 0.5
+            else:
+                scores[company.startup_id] = sum((value - low) / (high - low) for value in values) / len(values)
+        return scores
