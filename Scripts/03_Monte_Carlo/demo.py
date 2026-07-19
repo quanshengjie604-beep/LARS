@@ -25,6 +25,7 @@ from Utilities.plot_paths import (
     plot_paths,
     plot_moic_bars,
     plot_dashboard,
+    plot_segment_dashboard,
     _stage_names_from,
 )
 
@@ -110,6 +111,16 @@ def main() -> None:
         opportunity_id=params.opportunity_id,
         n_iterations=n_paths,
         save_path=out_dash,
+    )
+
+    out_seg = os.path.join(repo_root, "Output", "mc_dashboard_segments.png")
+    plot_segment_dashboard(
+        paths,
+        stage_names=_stage_names_from(params),
+        benchmark=30.0,
+        opportunity_id=params.opportunity_id,
+        n_iterations=n_paths,
+        save_path=out_seg,
     )
 
 

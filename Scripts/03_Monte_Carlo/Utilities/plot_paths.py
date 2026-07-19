@@ -412,6 +412,147 @@ def plot_dashboard(
     return fig
 
 
+def plot_segment_dashboard(
+    paths: dict[str, np.ndarray],
+    stage_names: list[str],
+    benchmark: float = 30.0,
+    opportunity_id: str = "",
+    n_iterations: int | None = None,
+    title: str | None = None,
+    save_path: str | None = None,
+    show: bool = False,
+):
+    """Outcome-segmented dashboard: one column per Loser / Contender / Winner.
+
+    Segments (by realized MOIC):
+        Loser      MOIC == 0                 -- total loss
+        Contender  0 < MOIC < benchmark      -- returned capital, below benchmark
+        Winner     MOIC >= benchmark         -- cleared the VC benchmark
+
+    Per segment (column): its share of all cases + contribution to total return,
+    then the per-round death and exit profiles *within that segment* (share of the
+    segment terminating in each round). Because survival / benchmark odds are
+    definitional inside a segment, the headline is recast to share + return
+    contribution.
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import PercentFormatter
+    from matplotlib.patches import Rectangle
+
+    moic = np.asarray(paths["moic"], dtype=float)
+    status = np.asarray(paths["status"])
+    stage_reached = np.asarray(paths["stage_reached"], dtype=int)
+    n = moic.size
+    k = len(stage_names)
+    total_return = float(moic.sum())
+
+    segments = [
+        ("Losers", f"MOIC = 0", moic == 0.0, _CRIT),
+        ("Contenders", f"0 < MOIC < {benchmark:g}x", (moic > 0.0) & (moic < benchmark), _BLUE),
+        ("Winners", f"MOIC ≥ {benchmark:g}x", moic >= benchmark, _GOOD),
+    ]
+
+    def _by_round(mask, path_status):
+        out = np.array(
+            [np.sum(mask & (status == path_status) & (stage_reached == j)) for j in range(k)],
+            dtype=float,
+        )
+        size = max(int(mask.sum()), 1)
+        return out / size
+
+    death = [_by_round(seg[2], PathStatus.FAILED) for seg in segments]
+    exit_ = [_by_round(seg[2], PathStatus.EXITED) for seg in segments]
+    death_max = max(0.02, max(d.max() for d in death))
+    exit_max = max(0.02, max(e.max() for e in exit_))
+
+    fig = plt.figure(figsize=(15, 9.6), facecolor=_PAGE)
+    gs = fig.add_gridspec(
+        3, 3, height_ratios=[1.05, 1.0, 1.0], hspace=0.42, wspace=0.2,
+        left=0.055, right=0.975, top=0.865, bottom=0.07,
+    )
+
+    def _seg_kpi(ax, name, definition, share, color, sub_lines):
+        ax.set_axis_off()
+        ax.add_patch(Rectangle((0, 0), 1, 1, transform=ax.transAxes,
+                     facecolor=_SURFACE, edgecolor=_GRID, linewidth=1.3, zorder=0))
+        ax.add_patch(Rectangle((0, 0.955), 1, 0.045, transform=ax.transAxes,
+                     facecolor=color, edgecolor="none", zorder=1))
+        ax.text(0.055, 0.885, name, transform=ax.transAxes, fontsize=15.5,
+                fontweight="bold", color=_INK, va="top")
+        ax.text(0.055, 0.745, definition, transform=ax.transAxes, fontsize=10,
+                color=_MUTED, va="top")
+        ax.text(0.05, 0.53, f"{share:.1%}", transform=ax.transAxes, fontsize=32,
+                fontweight="bold", color=_INK, va="center")
+        y = 0.30
+        for s in sub_lines:
+            ax.text(0.055, y, s, transform=ax.transAxes, fontsize=10,
+                    color=_INK2, va="center")
+            y -= 0.095
+
+    def _seg_bars(ax, vals, color, ylab, ymax, empty_note, show_x):
+        xs = np.arange(k)
+        rects = ax.bar(xs, vals, width=0.62, color=color, zorder=3)
+        ax.set_ylim(0, ymax * 1.28)
+        ax.set_xlim(-0.6, k - 0.4)
+        ax.set_xticks(xs)
+        ax.set_xticklabels(stage_names if show_x else [""] * k)
+        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1.0))
+        if ylab:
+            ax.set_ylabel(ylab, fontsize=10.5, color=_INK2)
+        ax.set_facecolor(_SURFACE)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color(_AXIS)
+        ax.spines["bottom"].set_color(_AXIS)
+        ax.tick_params(colors=_MUTED, labelsize=9.5)
+        ax.grid(axis="y", color=_GRID, linewidth=0.8)
+        ax.set_axisbelow(True)
+        if vals.sum() <= 0:
+            ax.text(0.5, 0.5, empty_note, transform=ax.transAxes, ha="center",
+                    va="center", fontsize=10, color=_MUTED, style="italic")
+            return
+        for rect, v in zip(rects, vals):
+            if v > 0:
+                ax.text(rect.get_x() + rect.get_width() / 2, v, f"{v:.1%}",
+                        ha="center", va="bottom", fontsize=9.5, color=_INK2)
+
+    for c, (name, definition, mask, color) in enumerate(segments):
+        size = int(mask.sum())
+        share = size / n
+        seg_return = float(moic[mask].sum())
+        ret_share = seg_return / total_return if total_return > 0 else 0.0
+        mean_moic = float(moic[mask].mean()) if size else 0.0
+
+        _seg_kpi(
+            fig.add_subplot(gs[0, c]), name, definition, share, color,
+            [f"{size:,} of {n:,} cases",
+             f"avg MOIC {mean_moic:,.1f}x",
+             f"{ret_share:.1%} of total return"],
+        )
+        _seg_bars(fig.add_subplot(gs[1, c]), death[c], _CRIT,
+                  "Death by round\n(% of segment)" if c == 0 else "",
+                  death_max, "no deaths in this segment", show_x=False)
+        _seg_bars(fig.add_subplot(gs[2, c]), exit_[c], _GOOD,
+                  "Exit by round\n(% of segment)" if c == 0 else "",
+                  exit_max, "no exits in this segment", show_x=True)
+
+    head = title or "VC Brain — Outcome-Segmented Dashboard"
+    fig.text(0.055, 0.945, head, ha="left", fontsize=18, fontweight="bold", color=_INK)
+    bits = [b for b in (opportunity_id,
+                        f"{n_iterations:,} simulated paths" if n_iterations else "",
+                        "rows share a scale across columns") if b]
+    fig.text(0.055, 0.905, "     ·     ".join(bits), ha="left",
+             fontsize=10.5, color=_MUTED)
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig.savefig(save_path, dpi=150, facecolor=_PAGE)
+        print(f"saved: {save_path}")
+    if show:
+        plt.show()
+    return fig
+
+
 def _stage_names_from(params) -> list[str]:
     rp = params.round_progression
     if not rp:
