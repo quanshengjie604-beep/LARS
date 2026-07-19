@@ -6,16 +6,19 @@
   <title>LARS — Monte Carlo Dashboard</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --panel: #1e293b;
-      --panel-2: #273449;
-      --text: #e2e8f0;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --accent-strong: #0ea5e9;
-      --border: #334155;
-      --ok: #4ade80;
-      --err: #f87171;
+      --bg: #eef2f8;
+      --bg-2: #f8fafc;
+      --panel: #ffffff;
+      --panel-2: #f4f7fb;
+      --text: #1e293b;
+      --muted: #64748b;
+      --accent: #0ea5e9;
+      --accent-2: #6366f1;
+      --accent-strong: #0284c7;
+      --border: #e2e8f0;
+      --border-soft: #eef2f8;
+      --ok: #16a34a;
+      --err: #dc2626;
     }
 
     * { box-sizing: border-box; }
@@ -23,32 +26,94 @@
     body {
       margin: 0;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: radial-gradient(1200px 600px at 50% -10%, #1e293b 0%, var(--bg) 60%);
+      background:
+        radial-gradient(900px 500px at 12% -8%, rgba(14,165,233,.10) 0%, transparent 55%),
+        radial-gradient(900px 500px at 92% 4%, rgba(99,102,241,.10) 0%, transparent 55%),
+        linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 45%, var(--bg) 100%);
+      background-attachment: fixed;
       color: var(--text);
       min-height: 100vh;
       display: flex;
       justify-content: center;
-      padding: 3rem 1rem;
+      padding: 2.5rem 1rem 3.5rem;
     }
 
     .container { width: 100%; max-width: 1080px; }
 
-    header { text-align: center; margin-bottom: 2rem; }
-    header h1 { margin: 0 0 .25rem; font-size: 1.9rem; letter-spacing: -0.02em; }
-    header p { margin: 0; color: var(--muted); }
+    /* Banner: only shows if a real image loads; hidden otherwise via JS onerror.
+       Shown uncropped (natural aspect ratio) since it carries the LARS wordmark. */
+    .banner {
+      display: none;
+      width: 100%;
+      height: auto;
+      border-radius: 18px;
+      margin-bottom: 1.5rem;
+      border: 1px solid var(--border);
+      box-shadow: 0 16px 34px rgba(15,23,42,.12);
+    }
+    .banner.loaded { display: block; }
+
+    /* Visually hidden but available to screen readers / search engines. */
+    .sr-only {
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    header { text-align: center; margin-bottom: 2.25rem; }
+    header h1 {
+      margin: 0 0 .5rem;
+      font-size: 2.15rem;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      font-weight: 800;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    header .tagline {
+      margin: 0;
+      color: var(--text);
+      font-size: 1.05rem;
+      font-weight: 600;
+      opacity: .92;
+    }
+    header p.subtitle { margin: .4rem 0 0; color: var(--muted); font-size: .92rem; }
+    header .rule {
+      width: 68px; height: 3px; margin: 1.1rem auto 0;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      opacity: .8;
+    }
 
     .card {
-      background: var(--panel);
+      background: linear-gradient(180deg, var(--panel) 0%, #f7f9fc 100%);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1.75rem;
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      border-radius: 16px;
+      padding: 1.9rem;
+      box-shadow: 0 12px 30px rgba(15,23,42,.08);
+      position: relative;
+      overflow: hidden;
+    }
+    /* Subtle accent hairline along the top edge of each card */
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), transparent);
+      opacity: .55;
     }
     .card + .card { margin-top: 1.5rem; }
 
     .card h2 {
       margin: 0 0 .35rem;
-      font-size: 1.2rem;
+      font-size: 1.22rem;
       letter-spacing: -0.01em;
     }
     .card .section-sub { margin: 0 0 1.4rem; color: var(--muted); font-size: .88rem; }
@@ -61,27 +126,28 @@
     }
 
     button {
-      padding: .85rem 1.5rem;
+      padding: .85rem 1.6rem;
       font-size: 1rem;
-      font-weight: 600;
-      color: #04222e;
-      background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+      font-weight: 700;
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 55%, var(--accent-2) 100%);
       border: none;
-      border-radius: 10px;
+      border-radius: 11px;
       cursor: pointer;
-      transition: transform .05s ease, filter .15s ease;
+      box-shadow: 0 6px 18px rgba(14,165,233,.35);
+      transition: transform .08s ease, filter .15s ease, box-shadow .15s ease;
     }
-    button:hover { filter: brightness(1.05); }
-    button:active { transform: translateY(1px); }
-    button:disabled { filter: grayscale(.5) brightness(.8); cursor: not-allowed; }
+    button:hover { filter: brightness(1.06); box-shadow: 0 8px 24px rgba(56,189,248,.45); }
+    button:active { transform: translateY(1px); box-shadow: 0 4px 12px rgba(14,165,233,.35); }
+    button:disabled { filter: grayscale(.5) brightness(.8); box-shadow: none; cursor: not-allowed; }
 
     .run-note { color: var(--muted); font-size: .85rem; }
 
     /* Loading spinner */
     .spinner {
       width: 18px; height: 18px;
-      border: 2px solid rgba(255,255,255,.25);
-      border-top-color: #04222e;
+      border: 2px solid rgba(255,255,255,.45);
+      border-top-color: #ffffff;
       border-radius: 50%;
       display: inline-block;
       vertical-align: -3px;
@@ -155,12 +221,14 @@
       margin-bottom: 1.5rem;
     }
     .stat {
-      background: var(--panel-2);
+      background: linear-gradient(180deg, var(--panel-2) 0%, #eaf0f8 100%);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 1rem;
       text-align: center;
+      transition: border-color .15s ease, transform .1s ease;
     }
+    .stat:hover { border-color: var(--accent); transform: translateY(-2px); }
     .stat .value { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
     .stat .label {
       font-size: .72rem; color: var(--muted); margin-top: .3rem;
@@ -192,9 +260,15 @@
 </head>
 <body>
   <div class="container">
+    <!-- Optional banner: drop an image at static/banner.png (or .jpg) to show it.
+         Hidden automatically if the file isn't present. -->
+    <img id="banner" class="banner" src="/static/Banner.png" alt="LARS banner" />
+
     <header>
-      <h1>LARS — Monte Carlo Dashboard</h1>
-      <p>Run the single-profile Monte Carlo analysis and view the decision dashboard.</p>
+      <h1 class="sr-only">LARS — Leveraging AI for Risk Assessment &amp; Strategy</h1>
+      <p class="tagline">Monte Carlo Dashboard</p>
+      <p class="subtitle">Run the single-profile Monte Carlo analysis and view the decision dashboard.</p>
+      <div class="rule"></div>
     </header>
 
     <!-- ============ Section 1: Monte Carlo analysis ============ -->
@@ -284,6 +358,12 @@
   </div>
 
   <script>
+    // Reveal the banner only if the image really loaded; otherwise leave it hidden.
+    const banner = document.getElementById("banner");
+    if (banner.complete && banner.naturalWidth > 0) banner.classList.add("loaded");
+    banner.addEventListener("load", () => banner.classList.add("loaded"));
+    banner.addEventListener("error", () => banner.classList.remove("loaded"));
+
     const runBtn = document.getElementById("run-btn");
     const dashboard = document.getElementById("dashboard");
     const errorBox = document.getElementById("error");
