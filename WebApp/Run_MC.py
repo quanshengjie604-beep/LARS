@@ -44,7 +44,7 @@ _DEFAULT_CHECKPOINT_CONFIG = _REPO_ROOT / "artifacts" / "demo_checkpoint" / "dem
 
 # Monte Carlo simulation size for a single profile. Fewer paths than the 100k
 # demo so a live web request returns quickly; still plenty for stable aggregates.
-_MC_ITERATIONS = 50_000
+_MC_ITERATIONS = 500_000
 _MC_SEED = 42
 
 
@@ -159,7 +159,7 @@ def run_profile_analysis(
     from contracts import SimControl  # noqa: E402
     from simulator import simulate_paths  # noqa: E402
     from aggregate import summarize  # noqa: E402
-    from Utilities.plot_paths import plot_dashboard, _stage_names_from  # noqa: E402
+    from Utilities.plot_paths import plot_segment_dashboard, _stage_names_from  # noqa: E402
 
     import os
 
@@ -190,8 +190,8 @@ def run_profile_analysis(
     paths = simulate_paths(params, terms, control)
     result = summarize(paths, params, terms)
 
-    # 4) Render the decision dashboard to an in-memory PNG.
-    fig = plot_dashboard(
+    # 4) Render the segmented decision dashboard to an in-memory PNG.
+    fig = plot_segment_dashboard(
         paths,
         stage_names=_stage_names_from(params),
         benchmark=30.0,

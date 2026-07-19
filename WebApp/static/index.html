@@ -211,23 +211,7 @@
     #enrich-status.ok { color: var(--ok); }
     #enrich-status.err { color: var(--err); }
 
-    /* Auto-fill result */
-    .enrich-result { display: none; }
-    .enrich-result.visible { display: block; }
-    .json-out {
-      background: #0f172a;
-      color: #e2e8f0;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1rem 1.1rem;
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      font-size: .8rem;
-      line-height: 1.5;
-      max-height: 380px;
-      overflow: auto;
-      white-space: pre;
-      margin: .4rem 0 1rem;
-    }
+    /* Research sources list */
     .sources { margin-bottom: 1rem; }
     .sources .sources-title {
       font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
@@ -247,7 +231,34 @@
     #dashboard { display: none; margin-top: 1.75rem; }
     #dashboard.visible { display: block; }
 
-    .meta { color: var(--muted); font-size: .85rem; margin-bottom: 1rem; }
+    .dashboard-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .meta { color: var(--muted); font-size: .85rem; }
+
+    /* Ghost / secondary button (e.g. "Hide dashboard") */
+    .btn-ghost {
+      flex: none;
+      padding: .5rem 1rem;
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--accent-strong);
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      box-shadow: none;
+      cursor: pointer;
+    }
+    .btn-ghost:hover {
+      filter: none;
+      border-color: var(--accent);
+      background: #eaf0f8;
+      box-shadow: 0 2px 8px rgba(15,23,42,.06);
+    }
 
     .stats {
       display: grid;
@@ -323,7 +334,10 @@
 
       <!-- Hidden dashboard, revealed once results come back -->
       <section id="dashboard">
-        <div class="meta" id="meta"></div>
+        <div class="dashboard-head">
+          <div class="meta" id="meta"></div>
+          <button type="button" id="hide-btn" class="btn-ghost">Hide dashboard</button>
+        </div>
         <div class="stats" id="stats"></div>
         <div class="plot-wrap">
           <img id="dashboard-img" alt="Monte Carlo decision dashboard" />
@@ -608,6 +622,11 @@
       document.getElementById("dashboard-img").src = data.dashboard;
       dashboard.classList.add("visible");
     }
+
+    // "Hide dashboard": collapse the results back out of view.
+    document.getElementById("hide-btn").addEventListener("click", () => {
+      dashboard.classList.remove("visible");
+    });
 
     function showError(message) {
       errorBox.innerText = message;
