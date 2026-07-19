@@ -84,22 +84,19 @@ model in Section 3.
 
 | Parameter | Type | Unit | Description |
 |-----------|------|------|-------------|
-| `arr` | float | USD | Annual recurring revenue (or revenue run-rate). |
-| `revenue_growth_rate` | float | fraction/yr | Observed YoY growth (e.g. 0.65 = 65%). |
+| `arr_usd` | float | USD | Annual recurring revenue (or revenue run-rate). **⚠ Hard to obtain** (private) but core input to M4 growth and M6 valuation. Expect `null` pre-seed → distribution widens by design. |
+| `revenue_growth_rate_yoy` | float | fraction/yr | Observed YoY growth (e.g. 0.65 = 65%). **⚠ Hard to obtain** (needs ≥2 revenue points) but is the direct driver of M4 — keep. |
 | `customer_count` | int | count | Number of paying customers. |
-| `cac` | float | USD | Customer acquisition cost. |
-| `sales_cycle_days` | float | days | Average time from lead to close. |
-| `churn_rate` | float | fraction/yr | Annual logo or revenue churn. |
-| `dau` | int | count | Daily active users (usage intensity). |
+| `churn_rate_annual` | float | fraction/yr | Annual logo or revenue churn. **⚠ Hard to obtain** (private) but a named M3 failure driver — keep despite scarcity; proxy from cohort/retention when disclosed. |
 
 ### 2.3 Financial & runway features
 
 | Parameter | Type | Unit | Description |
 |-----------|------|------|-------------|
-| `burn_rate` | float | USD/month | Net monthly cash burn. |
-| `runway_months` | float | months | Cash ÷ burn. **Primary driver of failure timing.** |
-| `current_stage` | enum | pre-seed / seed / A / B / C+ | Funding stage at time of evaluation. |
-| `last_round_size` | float | USD | Size of the most recent round, if any. |
+| `burn_rate_usd_monthly` | float | USD/month | Net monthly cash burn. **⚠ Hard to obtain** (private); M3 failure driver. Estimate from `team_size` × avg comp + `last_round_size_usd` if undisclosed, and lower `confidence_flag`. |
+| `runway_months` | float | months | Cash ÷ burn. **Primary driver of failure timing. ⚠ Hard to obtain** but the single highest-value input to M3 — estimate as `last_round_size_usd` ÷ `burn_rate_usd_monthly` when cash is undisclosed rather than dropping it. |
+| `current_stage` | enum | pre_seed / seed / series_a / series_b / series_c_plus | Funding stage at time of evaluation. |
+| `last_round_size_usd` | float | USD | Size of the most recent round, if any. |
 
 ### 2.4 Team & defensibility features
 
@@ -109,19 +106,18 @@ model in Section 3.
 | `single_founder_flag` | bool | Red-flag indicator; conditions failure hazard. |
 | `team_size` | int | Headcount. |
 | `proprietary_score` | float 0–1 | Proprietary vs. commoditizable technology / data moat. |
-| `patent_oss_activity` | float | Patent count or open-source traction signal. |
+| `patent_count` | int | Patents known at evaluation date (defensibility signal). |
+| `open_source_activity_score` | float 0–1 | Open-source traction signal. |
 
 ### 2.5 Market & macro features
 
 | Parameter | Type | Unit | Description |
 |-----------|------|------|-------------|
-| `tam` | float | USD | Total addressable market — **caps the exit-valuation ceiling.** |
-| `sam` | float | USD | Serviceable addressable market. |
-| `som` | float | USD | Serviceable obtainable market. |
-| `competitor_density` | float | 0–1 | How crowded the space is. |
+| `tam_usd` | float | USD | Total addressable market — **caps the exit-valuation ceiling** in M6. Estimated (state assumptions in evidence). Only `tam_usd` is consumed downstream, so `sam_usd`/`som_usd` are dropped. |
+| `competitor_density` | float | 0–1 | How crowded the space is. Partly redundant with `market_axis`; keep only if independently sourced (e.g. category count), else `null`. |
 | `sector` | enum | — | Sector tag (also used by the Thesis Engine filter). |
 | `geography` | enum | — | HQ region. |
-| `funding_climate_index` | float | 0–1 | Macro capital-availability signal at evaluation time. |
+| `funding_climate_index` | float | 0–1 | Macro capital-availability signal at evaluation time (conditions M1/M2 raise probability). |
 
 ### 2.6 Cold-start footprint features
 
@@ -132,8 +128,43 @@ Founder Score.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `public_footprint_score` | float 0–1 | Aggregate signal from public presence (writing, talks, community). |
-| `network_centrality` | float 0–1 | Position in the sourcing graph (accelerators, institutions, peers). |
-| `soft_skill_estimate` | float 0–1 | Modeled resilience / founder-market fit (carries wide uncertainty by design). |
+| `network_centrality` | float 0–1 | Position in the sourcing graph (accelerators, institutions, peers). **⚠ Hard to obtain** (requires building the sourcing graph) but high-signal for cold-start — keep at low confidence until the graph exists. |
+| `soft_skill_estimate` | float 0–1 | Modeled resilience / founder-market fit. **⚠ Hard to obtain / inherently noisy** — mandated cold-start signal (Area of Research 1); keep with wide uncertainty, never as a point value. |
+
+### 2.7 What was cut, and what to fight for
+
+The test for keeping a feature is simple: **does a model in Section 3 or the Monte Carlo loop in
+Section 5 actually consume it?** Features that fail that test *and* are hard to source were removed.
+
+**Cut** — not consumed downstream and low-yield to collect:
+
+| Removed | Was in | Why it's safe to drop |
+|---------|--------|-----------------------|
+| `cac_usd` | 2.2 | No model conditions on it; unit-economics detail no downstream target uses. |
+| `sales_cycle_days` | 2.2 | Same — never referenced by M1–M6 or the MC loop. |
+| `dau` | 2.2 | Usage-intensity nice-to-have; not a model input; rarely public. |
+| `sam_usd`, `som_usd` | 2.5 | Only `tam_usd` is consumed (M6 valuation cap). SAM/SOM add collection cost, no signal here. |
+
+**Hard to obtain but do NOT cut** — these are private/estimated yet each is a *named driver* of a
+model, so dropping them degrades the signal that matters most. Collect or estimate them and lower
+`confidence_flag` rather than omitting:
+
+| Keep | Feeds | Fallback when unavailable |
+|------|-------|---------------------------|
+| `runway_months`, `burn_rate_usd_monthly` | M3 failure clock (the loop's `t_fail`) | Estimate `runway ≈ last_round_size_usd ÷ burn`; `burn ≈ team_size × avg comp`. |
+| `arr_usd`, `revenue_growth_rate_yoy` | M4 growth, M6 valuation | `null` → wider growth distribution (honest, not fabricated). |
+| `churn_rate_annual` | M3 hazard | Proxy from retention/cohort data if disclosed; else `null`. |
+| `network_centrality`, `soft_skill_estimate` | Cold-start founder signal | Low confidence by design; carry wide uncertainty. |
+
+Everything else in 2.1–2.6 is both consumed and cheaply sourced — keep as-is.
+
+**Naming.** Field names follow the collection contract in `ngboost_data_requirements.md`
+(`_usd` / `_yoy` / `_annual` / `_monthly` suffixes) so the producer and consumer schemas join 1:1.
+
+**Superset.** That doc also collects a few fields not listed here — `last_round_date`,
+`total_funding_to_date_usd`, `cash_balance_usd`, `founder_prior_startups`, `technical_founder_flag`,
+`founder_industry_experience_years`. They feed point-in-time joins, the fallback estimates above, and
+the upstream axis scoring, but are not passed to the models as direct features.
 
 ---
 
@@ -153,10 +184,10 @@ Pareto tail.
 |---|-----------------|--------|----------------|---------|
 | M1 | P(progress to next round) | Beta(α, β) | `series_alpha`, `series_beta` | Uncertainty over the probability of raising the next round. Mean = α/(α+β); spread encodes confidence. One instance per stage transition (Seed→A, A→B, B→C+). |
 | M2 | Time to next round / exit | Weibull(k, λ) | `t_next_k`, `t_next_lambda` | Time-to-event; trained with **censoring** (companies still alive contribute "survived at least t"). |
-| M3 | Failure timing | Weibull(k, λ) | `fail_k`, `fail_lambda` | Hazard of running out of cash, driven mainly by `runway_months`, `burn_rate`, `churn_rate`. |
+| M3 | Failure timing | Weibull(k, λ) | `fail_k`, `fail_lambda` | Hazard of running out of cash, driven mainly by `runway_months`, `burn_rate_usd_monthly`, `churn_rate_annual`. |
 | M4 | Revenue / ARR growth per period | LogNormal(μ, σ) | `growth_mu`, `growth_sigma` | Multiplicative growth factor per simulated period. |
 | M5 | Exit type | Categorical(**p**) | `p_ipo`, `p_acq`, `p_secondary`, `p_none` | Probability vector over exit modes; sums to 1. |
-| M6 | Exit valuation \| exit | LogNormal body + Pareto tail | `exit_mu`, `exit_sigma`, `tail_xm`, `tail_alpha` | Heavy-tailed exit value. Pareto tail (`tail_alpha` ≈ 1.5–2.0) captures the power-law outliers that drive VC returns. Capped by `tam`. |
+| M6 | Exit valuation \| exit | LogNormal body + Pareto tail | `exit_mu`, `exit_sigma`, `tail_xm`, `tail_alpha` | Heavy-tailed exit value. Pareto tail (`tail_alpha` ≈ 1.5–2.0) captures the power-law outliers that drive VC returns. Capped by `tam_usd`. |
 
 ### 3.2 Parameter detail
 
@@ -273,7 +304,7 @@ for i in 1..N:
             moic_i = 0
         else:
             exit_val = sample LogNormal(exit_mu, exit_sigma) with Pareto(tail_xm, tail_alpha) tail
-            exit_val = min(exit_val, tam)          # capped by market size
+            exit_val = min(exit_val, tam_usd)      # capped by market size
             proceeds = ownership * exit_val
             moic_i   = proceeds / check_size
 
@@ -330,7 +361,7 @@ numbers a VC actually reasons in — far more informative than a single success 
     "Cap table not disclosed — assumed 20%/round dilution",
     "Entry valuation implied from thesis check size and target ownership"
   ],
-  "evidence_trace": { "p_gt_10x": { "founder_score_persistent": 0.21, "arr_growth": 0.17 } }
+  "evidence_trace": { "p_gt_10x": { "founder_score_persistent": 0.21, "revenue_growth_rate_yoy": 0.17 } }
 }
 ```
 

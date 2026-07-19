@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(*)"
+    ],
+    "deny": [
+      "Bash(rm)",
+      "Bash(rm *)",
+      "Bash(rm -rf *)",
+      "Bash(sudo rm *)"
+    ]
+  }
+}
