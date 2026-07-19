@@ -1,0 +1,105 @@
+http:
+  user_agent: "LARS-Founder-Screening/0.2 (https://github.com/quanshengjie604-beep/LARS; research prototype)"
+  timeout_seconds: 30
+  default_delay_seconds: 1.0
+
+sources:
+  yc:
+    enabled: true
+    quota: 2000
+    overfetch_factor: 3
+    recent_months: 24
+    backfill_older: true
+    search_delay_seconds: 0.25
+    page_delay_seconds: 0.4
+    progress_interval: 100
+    domain_keywords:
+      - artificial intelligence
+      - machine learning
+      - generative ai
+      - ai assistant
+      - deep learning
+      - computer vision
+      - natural language processing
+      - developer tools
+      - devops
+      - open source
+      - infrastructure
+      - data engineering
+      - databases
+      - cloud computing
+      - robotics
+      - robotic
+      - autonomous
+      - biotech
+      - biological
+      - bioinformatics
+      - drug discovery
+      - therapeutics
+      - genomics
+      - synthetic biology
+      - healthcare
+      - health tech
+  labs:
+    enabled: false
+    quota: 250
+    pages:
+      - institution: MIT CSAIL
+        url: https://www.csail.mit.edu/people
+        person_selector: ".views-row h2 a, .views-row h3 a, .person a"
+      - institution: Stanford AI Lab
+        url: https://ai.stanford.edu/people/
+        person_selector: ".person a, .people a, main h3 a"
+      - institution: Berkeley AI Research
+        url: https://bair.berkeley.edu/people.html
+        person_selector: ".person a, .people a, main a"
+      - institution: CMU Machine Learning Department
+        url: https://www.ml.cmu.edu/people/index.html
+        person_selector: ".person a, .people a, .card a"
+      - institution: Oxford Applied and Theoretical Machine Learning
+        url: https://oatml.cs.ox.ac.uk/members/
+        person_selector: ".member a, .people a, article a"
+      - institution: ETH AI Center
+        url: https://ai.ethz.ch/people.html
+        person_selector: ".person a, .people a, article a"
+
+  hackathons:
+    enabled: false
+    quota: 150
+    pages:
+      - event_name: Public AI Hackathon Projects
+        url: https://devpost.com/software?query=artificial%20intelligence
+        project_selector: ".software-list-content, article"
+        title_selector: ".software-entry-name, h2, h3"
+        project_link_selector: "a[href]"
+        member_selector: ".user-profile-link, .software-team-member a, .team-member a, [rel='author']"
+      - event_name: Public Robotics Hackathon Projects
+        url: https://devpost.com/software?query=robotics
+        project_selector: ".software-list-content, article"
+        title_selector: ".software-entry-name, h2, h3"
+        project_link_selector: "a[href]"
+        member_selector: ".user-profile-link, .software-team-member a, .team-member a, [rel='author']"
+
+  github:
+    enabled: false
+    quota: 700
+    token_env: GITHUB_TOKEN
+    require_token: true
+    enrich_users: true
+    contributors_per_repo: 8
+    repository_queries:
+      - "topic:artificial-intelligence stars:>100 pushed:>2025-01-01"
+      - "topic:machine-learning stars:>100 pushed:>2025-01-01"
+      - "topic:robotics stars:>50 pushed:>2025-01-01"
+      - "topic:developer-tools stars:>100 pushed:>2025-01-01"
+      - "topic:bioinformatics stars:>50 pushed:>2025-01-01"
+
+  arxiv:
+    enabled: false
+    # Runs last and may fill any unused capacity up to the global 2,000-person cap.
+    quota: 2000
+    months: 24
+    page_size: 100
+    delay_seconds: 3.0
+    categories: [cs.AI, cs.LG, cs.RO, cs.DC, cs.CL, cs.CV, q-bio.QM]
+

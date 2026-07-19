@@ -1,0 +1,19 @@
+{
+  "run_id": "crawl_31ad005cd4aaf0fe",
+  "started_at": "2026-07-18T22:44:40.657824Z",
+  "completed_at": "2026-07-18T22:54:13.252596Z",
+  "requested_max_candidates": 2000,
+  "unique_candidates": 2000,
+  "evidence_records": 2005,
+  "raw_records_by_source": {
+    "yc": 2005
+  },
+  "sources_attempted": [
+    "yc"
+  ],
+  "errors": [],
+  "outputs": [
+    "sourcing_candidates.jsonl",
+    "evidence_registry.jsonl"
+  ]
+}
