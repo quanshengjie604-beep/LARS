@@ -8,7 +8,7 @@ The evaluation layer emits one JSON object per opportunity (see
     m3  survival_curve {day -> P(survive)}       company survival / failure timing
     m4  lognormal{log_mu, log_sigma}             per-round growth multiple
     m5  categorical{acquisition, ipo,            exit type
-                    no_exit_observed}
+                    secondary, no_exit_observed}
     m6  lognormal{log_mu, log_sigma}             exit valuation (USD)
 
 The simulator, however, consumes a single ``DistributionParams`` whose fields are
@@ -19,7 +19,7 @@ four shape mismatches:
 
     #1  m1 P(raise)            -> a Beta(alpha, beta) per stage transition
     #2  m2 / m3 survival curve -> Weibull(k, lambda) fit to the curve points
-    #3  m5 3-way categorical   -> {p_ipo, p_acq, p_secondary, p_none}
+    #3  m5 4-way categorical   -> {p_ipo, p_acq, p_secondary, p_none}
     #4  m6 LogNormal (USD)     -> LogNormal body + Pareto tail, run in
                                   ``exit_value_mode="absolute"``
 
@@ -155,17 +155,19 @@ def _weibull_from_survival(
 
 
 # --------------------------------------------------------------------------
-# #3  m5 3-way -> {p_ipo, p_acq, p_secondary, p_none}
+# #3  m5 4-way -> {p_ipo, p_acq, p_secondary, p_none}
 # --------------------------------------------------------------------------
 def _exit_mix(m5_params: dict[str, float]) -> dict[str, float]:
-    """Map {acquisition, ipo, no_exit_observed} to the contract's 4-way exit mix.
+    """Map {acquisition, ipo, secondary, no_exit_observed} to the contract's 4-way exit mix.
 
-    The file has no "secondary" class, so p_secondary = 0. Probabilities are
-    renormalized defensively.
+    The M5 exit-type model now emits a secondary class alongside ipo /
+    acquisition / no_exit_observed; it is read straight through here. ``secondary``
+    is defaulted to 0.0 so older 3-way records (no secondary key) still map
+    cleanly. Probabilities are renormalized defensively.
     """
     p_ipo = float(m5_params.get("ipo", 0.0))
     p_acq = float(m5_params.get("acquisition", 0.0))
-    p_secondary = 0.0
+    p_secondary = float(m5_params.get("secondary", 0.0))
     p_none = float(m5_params.get("no_exit_observed", 0.0))
 
     total = p_ipo + p_acq + p_secondary + p_none

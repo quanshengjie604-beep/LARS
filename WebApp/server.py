@@ -31,7 +31,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from Run_MC import run_singular_profile_analysis
+from Run_MC import run_profile_analysis, run_singular_profile_analysis
 from intake import read_profile_submission
 from enrich import EnrichmentError, enrich_profile_from_name
 
@@ -135,18 +135,28 @@ async def enrich(
     linkedin: str = Form(""),
     website: str = Form(""),
 ) -> JSONResponse:
-    """Research a founder from just their name and return an NGBoost request.
+    """Research a founder from a name, score them, and return the MC dashboard.
 
     Only ``name`` (or ``first_name``/``last_name``) is required; the other
-    fields are optional hints that focus the web search. Returns::
+    fields are optional hints that focus the web search. The full chain runs
+    server-side:
+
+        name -> web research -> NGBoost inference request (one profile)
+             -> six-model NGBoost prediction
+             -> single Monte Carlo simulation
+             -> decision dashboard
+
+    Returns::
 
         {"status": "ok",
-         "inference_request": {...},   # schema-clean, ready for NGBoost
+         "company_name": "...",
+         "summary": {...},             # Monte Carlo aggregates
+         "dashboard": "data:image/png;base64,...",
          "citations": [{"url", "title"}, ...],
          "model": "..."}
 
-    The OpenAI call is blocking (network + tool use), so it runs in a worker
-    thread to keep the event loop responsive.
+    Both the OpenAI call and the simulation are blocking (network / CPU), so the
+    whole chain runs in a worker thread to keep the event loop responsive.
     """
     full_name = name.strip() or f"{first_name} {last_name}".strip()
     if not full_name:
@@ -161,10 +171,25 @@ async def enrich(
         "Website": website,
     }
 
+    # Label the dashboard by company (if the user gave one) else the founder.
+    display_name = company_name.strip() or full_name
+
+    def _research_and_analyze() -> dict:
+        """Enrich the founder, then feed the profile through NGBoost + MC."""
+        enriched = enrich_profile_from_name(full_name, hints)
+        request = enriched["inference_request"]
+        request.setdefault("company_name", display_name)
+        analysis = run_profile_analysis(request)
+        return {
+            "company_name": display_name,
+            "summary": analysis["summary"],
+            "dashboard": analysis["dashboard"],
+            "citations": enriched.get("citations", []),
+            "model": enriched.get("model", ""),
+        }
+
     try:
-        result = await run_in_threadpool(
-            enrich_profile_from_name, full_name, hints
-        )
+        result = await run_in_threadpool(_research_and_analyze)
     except EnrichmentError as exc:
         return JSONResponse(
             status_code=502,
@@ -173,11 +198,9 @@ async def enrich(
     except Exception as exc:  # noqa: BLE001 - surface any unexpected error to the UI
         return JSONResponse(
             status_code=500,
-            content={"status": "error", "detail": f"Enrichment failed: {exc}"},
+            content={"status": "error", "detail": f"Analysis failed: {exc}"},
         )
 
-    # Drop the (long) raw model text from the API payload; keep it server-side.
-    result.pop("raw_text", None)
     return JSONResponse(content={"status": "ok", **result})
 
 

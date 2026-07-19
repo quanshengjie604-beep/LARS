@@ -92,8 +92,21 @@ def _confidence(record: dict[str, Any]) -> dict[str, Any]:
     return {"level": level, "score": round(score, 4), "missing_field_count": missing, "contradicted_field_count": contradicted, "source_count": sources}
 
 
-def infer_all(config: dict[str, Any], output_path: str | Path) -> list[dict[str, Any]]:
-    records = read_jsonl(config["data"]["inference_requests"])
+def infer_records(
+    config: dict[str, Any],
+    records: list[dict[str, Any]],
+    output_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """Run the six-model checkpoint over an in-memory list of inference requests.
+
+    This is the engine behind ``infer_all``: it validates the records, loads
+    whichever ``m1``..``m6`` checkpoints exist under ``config['project']['model_dir']``
+    and assembles one prediction record per input. ``infer_all`` wraps this with
+    file I/O; callers that already hold the requests in memory (e.g. the WebApp
+    running a single founder profile) can call this directly and skip the disk
+    round-trip. When ``output_path`` is given the predictions are also written to
+    that JSONL file.
+    """
     report = validate_features(records, live=True)
     if not report.valid:
         raise ValueError(report.model_dump())
@@ -122,5 +135,11 @@ def infer_all(config: dict[str, Any], output_path: str | Path) -> list[dict[str,
             "model_confidence": _confidence(record),
             "data_quality_warnings": [w for w in report.warnings if w.startswith(f"record {idx + 1}:")],
         })
-    write_jsonl(output_path, output)
+    if output_path is not None:
+        write_jsonl(output_path, output)
     return output
+
+
+def infer_all(config: dict[str, Any], output_path: str | Path) -> list[dict[str, Any]]:
+    records = read_jsonl(config["data"]["inference_requests"])
+    return infer_records(config, records, output_path)
