@@ -54,7 +54,7 @@ from Utilities.plot_paths import (  # noqa: E402
 )
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_DEFAULT_INPUT = os.path.join(_REPO_ROOT, "artifacts", "demo_founder_predictions.jsonl")
+_DEFAULT_INPUT = os.path.join(_REPO_ROOT, "artifacts", "scrape_demo_predictions.jsonl")
 _DEFAULT_OUTDIR = os.path.join(_REPO_ROOT, "Output", "company_plots")
 _BENCHMARK = 30.0
 

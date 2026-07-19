@@ -37,7 +37,7 @@ from theta_from_prediction import (
 
 # Repo root = three levels up from this file (Scripts/03_Monte_Carlo/<file>).
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_DEFAULT_INPUT = os.path.join(_REPO_ROOT, "artifacts", "demo_founder_predictions.jsonl")
+_DEFAULT_INPUT = os.path.join(_REPO_ROOT, "artifacts", "scrape_demo_predictions.jsonl")
 _DEFAULT_OUTPUT = os.path.join(_REPO_ROOT, "artifacts", "demo_mc_results.jsonl")
 
 
