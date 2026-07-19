@@ -60,3 +60,38 @@ python Scripts/01_Screening/crawl_founders.py --sources yc --max-candidates 2000
 
 HTML sources change over time. Their selectors are configuration, not hard-coded assumptions; update `person_selector`, `project_selector`, and `member_selector` when a permitted public page changes structure.
 
+
+## Evidence-backed enrichment
+
+The enrichment step keeps the original crawl unchanged and writes a second, auditable dataset. It extracts only claims explicitly present in the collected public founder biography, existing GitHub/paper evidence, and verified company status.
+
+1. Download the official QS World University Rankings 2027 workbook from the [QS report page](https://www.qs.com/insights/qs-world-university-rankings-2027-results-table-excel) and save it as `screening_handover/reference/qs_world_university_rankings_2027.xlsx`.
+2. Validate the local plan:
+
+```powershell
+python Scripts/01_Screening/enrich_founders.py --dry-run
+```
+
+3. Generate the enriched dataset:
+
+```powershell
+python Scripts/01_Screening/enrich_founders.py
+```
+
+The default output is `screening_handover/founder_enriched` and contains the original candidate/evidence records plus:
+
+- `education.degrees`: explicit bachelor, master, and PhD claims; institution name; completion status when stated; official QS 2027 published rank; biography and QS source URLs.
+- `education.has_bachelor`, `has_master`, `has_phd`: `true` only when that level is explicitly documented; otherwise `null`, never guessed `false`.
+- `career_history.verified_prior_exit_count`: verified minimum across acquired, public, closed, or YC-inactive founded companies. No observed evidence remains `null`, not zero.
+- `skills.items` and `documented_skill_count`: unique explicit public-bio terms, GitHub repository languages, and matched paper fields. Titles and company sectors do not generate inferred skills.
+- `enrichment_report.json`: record counts, source version, and coverage.
+
+QS publishes a single numeric rank through approximately the top 700 and official rank intervals below that point. `qs_world_rank` preserves the official cell exactly (integer or interval string); it never fabricates a single rank from an interval.
+
+To regenerate Chroma-ready records from the enriched source:
+
+```powershell
+python Scripts/01_Screening/export_chroma.py `
+  --input-dir screening_handover/founder_enriched `
+  --output-dir screening_handover/chroma_enriched
+```
