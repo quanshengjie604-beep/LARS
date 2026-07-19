@@ -76,6 +76,21 @@ def test_inactive_company_counts_as_verified_exit_but_active_does_not_imply_zero
     assert inactive["exits"][0]["outcome"] == "closed_or_inactive"
 
 
+def test_explicit_reported_exit_count_stays_separate_from_verified_outcomes():
+    item = candidate("4x Founder, 2 exits. Building the next company.")
+    result = extract_exits(item)
+    assert result["reported_prior_exit_count"] == 2
+    assert result["verified_prior_exit_count"] is None
+    enriched, evidence = enrich_candidate(item, InstitutionMatcher(rankings()))
+    assert enriched["founder_features"]["founder_prior_exits"] is None
+    assert any(record["verification_status"] == "founder_reported" for record in evidence)
+
+
+def test_two_time_exited_founder_phrase_is_supported():
+    result = extract_exits(candidate("Two-time exited founder in biotech and AI SaaS."))
+    assert result["reported_prior_exit_count"] == 2
+
+
 def test_skills_are_explicit_terms_and_unique():
     item = candidate("Built machine learning systems in Python; prior machine learning research in robotics.")
     result = extract_skills(item)

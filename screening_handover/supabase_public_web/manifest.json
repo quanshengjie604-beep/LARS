@@ -1,0 +1,57 @@
+{
+  "format": "lars-supabase-jsonl-v1",
+  "generated_at": "2026-07-19T01:13:43.827748Z",
+  "source_directory": "screening_handover\\founder_public_web",
+  "migration": "supabase/migrations/202607180001_founder_screening.sql",
+  "network_requests": false,
+  "tables": [
+    {
+      "table": "founders",
+      "file": "founders.supabase.jsonl",
+      "records": 2000,
+      "sha256": "9065c7cb70ba42f67c0d973253ae71dd2a81b36a0822342d4c757e186deb1ad3"
+    },
+    {
+      "table": "founder_companies",
+      "file": "founder_companies.supabase.jsonl",
+      "records": 1022,
+      "sha256": "147aaab67b4ee78e226b00b375643c76275a4482cd9b2d2863166bfce8bdf3e8"
+    },
+    {
+      "table": "founder_company_roles",
+      "file": "founder_company_roles.supabase.jsonl",
+      "records": 2005,
+      "sha256": "1b5cbb8c6f3b706e14d3ca191a6090b3f5033d163883ef798093727fb0267a75"
+    },
+    {
+      "table": "founder_education",
+      "file": "founder_education.supabase.jsonl",
+      "records": 476,
+      "sha256": "8f2afba05ec50530bd61520c45ea07912e73b8d523881de28c4a09a21b228b13"
+    },
+    {
+      "table": "founder_skills",
+      "file": "founder_skills.supabase.jsonl",
+      "records": 906,
+      "sha256": "6460d82b417a77d970a9dbd966101c3af617a58be0b67d925e5eef2e66aa5be9"
+    },
+    {
+      "table": "founder_exits",
+      "file": "founder_exits.supabase.jsonl",
+      "records": 69,
+      "sha256": "d3499ed5c70d2957e060cc07e9f8794945c4736b1c5da21a803c358c8d3709f3"
+    },
+    {
+      "table": "founder_reported_exit_claims",
+      "file": "founder_reported_exit_claims.supabase.jsonl",
+      "records": 5,
+      "sha256": "0fad2f250e60194aab7d758d7b1cb59a29c83ce6613681b9761fb4fa3535b4dd"
+    },
+    {
+      "table": "founder_evidence",
+      "file": "founder_evidence.supabase.jsonl",
+      "records": 3428,
+      "sha256": "2a57e62ccf3c6902eaabcd5180b8e97b4160920ac8f4722dbda45f8d18630a31"
+    }
+  ]
+}

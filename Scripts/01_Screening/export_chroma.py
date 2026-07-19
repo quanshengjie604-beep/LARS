@@ -76,6 +76,8 @@ def founder_record(candidate: dict[str, Any], evidence: list[dict[str, Any]]) ->
         document_lines.append("Education: " + " | ".join(str(item) for item in details if item))
     if career.get("verified_prior_exit_count") is not None:
         document_lines.append(f"Verified prior exits: {career['verified_prior_exit_count']}")
+    if career.get("reported_prior_exit_count") is not None:
+        document_lines.append(f"Founder-reported prior exits: {career['reported_prior_exit_count']}")
     if skills.get("items"):
         document_lines.append("Documented skills: " + ", ".join(item["name"] for item in skills["items"]))
     document_lines.extend(f"Verified evidence: {excerpt}" for excerpt in evidence_excerpts)
@@ -112,6 +114,7 @@ def founder_record(candidate: dict[str, Any], evidence: list[dict[str, Any]]) ->
         best_qs_world_rank=education.get("best_qs_world_rank"),
         qs_edition=education.get("qs_edition"),
         verified_prior_exit_count=career.get("verified_prior_exit_count"),
+        reported_prior_exit_count=career.get("reported_prior_exit_count"),
         documented_skill_count=skills.get("documented_skill_count"),
         documented_skills=[item["name"] for item in skills.get("items") or []],
     )

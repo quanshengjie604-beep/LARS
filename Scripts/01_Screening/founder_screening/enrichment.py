@@ -24,11 +24,11 @@ _NS = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 _DEGREE_PATTERNS = {
     "phd": re.compile(r"\b(?:PhD|DPhil|doctor(?:al|ate))\b", re.IGNORECASE),
     "master": re.compile(
-        r"\b(?:MEng|MSc|MS|MBA|MA|MPH|MPhil|master(?:'s)?|masters)\b",
+        r"\b(?:(?-i:MEng|MSc|MS|MBA|MA|MPH|MPhil)|master(?:'s)?|masters)\b",
         re.IGNORECASE,
     ),
     "bachelor": re.compile(
-        r"\b(?:BEng|BSc|BS|BA|AB|BBA|bachelor(?:'s)?|undergraduate degree)\b",
+        r"\b(?:(?-i:BEng|BSc|BS|BA|AB|BBA)|bachelor(?:'s)?|undergraduate degree)\b",
         re.IGNORECASE,
     ),
 }
@@ -80,6 +80,32 @@ _INSTITUTION_ALIASES = {
     "uw": "University of Washington",
     "uwaterloo": "University of Waterloo",
     "ucsb": "University of California, Santa Barbara (UCSB)",
+    "uc san diego": "University of California, San Diego (UCSD)",
+    "purdue": "Purdue University",
+    "ut austin": "University of Texas at Austin",
+    "cu boulder": "University of Colorado Boulder",
+    "uchicago": "University of Chicago",
+    "chicago booth": "University of Chicago",
+    "duke": "Duke University",
+    "st andrews": "University of St Andrews",
+    "university of michigan": "University of Michigan-Ann Arbor",
+    "iit bombay": "Indian Institute of Technology Bombay (IITB)",
+    "iit madras": "Indian Institute of Technology Madras (IITM)",
+    "iit kharagpur": "Indian Institute of Technology Kharagpur (IIT-KGP)",
+    "gatech": "Georgia Institute of Technology",
+    "georgiatechisye": "Georgia Institute of Technology",
+    "unc chapel hill": "University of North Carolina at Chapel Hill",
+    "wharton": "University of Pennsylvania",
+    "the wharton school": "University of Pennsylvania",
+    "polimi": "Politecnico di Milano",
+    "tum": "Technical University of Munich",
+    "rutgers": "Rutgers University–New Brunswick",
+    "university of illinois at urbana champaign": "University of Illinois Urbana-Champaign",
+    "northeastern": "Northeastern University",
+    "tubingen": "Eberhard Karls Universität Tübingen",
+    "ohio state": "The Ohio State University",
+    "brown": "Brown University",
+    "university college london": "UCL",
 }
 
 _SKILL_TERMS = {
@@ -343,6 +369,39 @@ def extract_education(text: str | None, source_url: str | None, matcher: Institu
         "interpretation": "null means not established by inspected public evidence, not false",
     }
 
+_EXIT_COUNT_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+}
+
+
+def _reported_exit_claim(text: str, source_url: str | None) -> dict[str, Any] | None:
+    patterns = (
+        r"\b(?P<count>\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:x|×)?\s+(?:successful\s+)?exits?\b",
+        r"\b(?P<count>\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)[-\s]+time\s+exited\s+founder\b",
+        r"\bexited\s+(?P<count>once|twice)\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text or "", re.IGNORECASE)
+        if not match:
+            continue
+        raw = match.group("count").casefold()
+        count = {"once": 1, "twice": 2}.get(raw, _EXIT_COUNT_WORDS.get(raw))
+        if count is None and raw.isdigit():
+            count = int(raw)
+        if not count:
+            continue
+        start = max(0, match.start() - 100)
+        end = min(len(text), match.end() + 100)
+        return {
+            "count": count,
+            "source_url": source_url,
+            "evidence_excerpt": text[start:end].strip()[:500],
+            "verification_status": "founder_reported",
+        }
+    return None
+
+
 def extract_exits(candidate: dict[str, Any]) -> dict[str, Any]:
     exits: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -392,10 +451,16 @@ def extract_exits(candidate: dict[str, Any]) -> dict[str, Any]:
             "evidence_url": candidate.get("founder_relationship_evidence_url"),
             "evidence_excerpt": match.group(0)[:500],
         })
+    reported_claim = _reported_exit_claim(
+        bio, candidate.get("founder_relationship_evidence_url")
+    )
     return {
         "verified_prior_exit_count": len(exits) if exits else None,
         "exits": exits,
+        "reported_prior_exit_count": reported_claim["count"] if reported_claim else None,
+        "reported_exit_claims": [reported_claim] if reported_claim else [],
         "count_interpretation": "verified minimum; null means no verified exit was found, not zero exits",
+        "reported_count_interpretation": "explicit public self-report; kept separate from verified company outcomes",
         "closed_or_inactive_counts_as_exit": True,
     }
 
@@ -405,7 +470,8 @@ def extract_skills(candidate: dict[str, Any]) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
     for skill, patterns in _SKILL_TERMS.items():
-        match = next((re.search(pattern, text, re.IGNORECASE) for pattern in patterns if re.search(pattern, text, re.IGNORECASE)), None)
+        flags = 0 if skill in {"Python", "Rust", "JavaScript", "TypeScript", "Java", "C++", "CUDA", "SQL", "React"} else re.IGNORECASE
+        match = next((re.search(pattern, text, flags) for pattern in patterns if re.search(pattern, text, flags)), None)
         if not match:
             continue
         key = skill.casefold()
@@ -500,6 +566,20 @@ def enrich_candidate(candidate: dict[str, Any], matcher: InstitutionMatcher) -> 
                 {"company_name": exit_item.get("company_name"), "outcome": exit_item["outcome"]},
             ))
 
+    for claim in candidate["career_history"].get("reported_exit_claims") or []:
+        if claim.get("source_url"):
+            evidence.append({
+                **_evidence_record(
+                    candidate,
+                    "reported_exit_count",
+                    claim["evidence_excerpt"],
+                    claim["source_url"],
+                    {"reported_prior_exit_count": claim["count"]},
+                ),
+                "verification_status": "founder_reported",
+                "confidence": "medium",
+            })
+
     if candidate["skills"]["items"] and source_url:
         evidence.append(_evidence_record(
             candidate,
@@ -556,6 +636,8 @@ def enrich_dataset(input_dir: Path, output_dir: Path, qs_path: Path) -> dict[str
             counts["founders_with_qs_rank"] += 1
         if item["career_history"]["verified_prior_exit_count"] is not None:
             counts["founders_with_verified_exit"] += 1
+        if item["career_history"].get("reported_prior_exit_count") is not None:
+            counts["founders_with_reported_exit_count"] += 1
         if item["skills"]["documented_skill_count"]:
             counts["founders_with_documented_skills"] += 1
     combined_evidence = {item["source_id"]: item for item in existing_evidence}

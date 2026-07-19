@@ -1,0 +1,17 @@
+{
+  "format": "chroma-record-jsonl-v1",
+  "generated_at": "2026-07-18T23:13:46.895337Z",
+  "embedding_policy": "documents_only; collection embedding function computes embeddings",
+  "collections": [
+    {
+      "suggested_name": "lars_founders",
+      "file": "founders.chroma.jsonl",
+      "records": 2000
+    },
+    {
+      "suggested_name": "lars_founder_evidence",
+      "file": "founder_evidence.chroma.jsonl",
+      "records": 2005
+    }
+  ]
+}

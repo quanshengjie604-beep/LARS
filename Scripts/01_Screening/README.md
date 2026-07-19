@@ -83,6 +83,7 @@ The default output is `screening_handover/founder_enriched` and contains the ori
 - `education.degrees`: explicit bachelor, master, and PhD claims; institution name; completion status when stated; official QS 2027 published rank; biography and QS source URLs.
 - `education.has_bachelor`, `has_master`, `has_phd`: `true` only when that level is explicitly documented; otherwise `null`, never guessed `false`.
 - `career_history.verified_prior_exit_count`: verified minimum across acquired, public, closed, or YC-inactive founded companies. No observed evidence remains `null`, not zero.
+- `career_history.reported_prior_exit_count`: an explicit count stated in a public founder biography (for example, "2 exits"). It remains `founder_reported` evidence and never populates the verified model feature.
 - `skills.items` and `documented_skill_count`: unique explicit public-bio terms, GitHub repository languages, and matched paper fields. Titles and company sectors do not generate inferred skills.
 - `enrichment_report.json`: record counts, source version, and coverage.
 
@@ -95,3 +96,65 @@ python Scripts/01_Screening/export_chroma.py `
   --input-dir screening_handover/founder_enriched `
   --output-dir screening_handover/chroma_enriched
 ```
+## LinkedIn-anchored public-web enrichment
+
+This optional step normalizes existing public LinkedIn vanity URLs as exact identity anchors. It never requests LinkedIn pages. The anchor is used for an exact Wikidata P6634 join; additional facts come only from public Wikidata records and robots-permitted company pages.
+
+Validate the plan without network access:
+
+```powershell
+python Scripts/01_Screening/enrich_public_web.py --dry-run
+```
+
+Run all available company domains:
+
+```powershell
+python Scripts/01_Screening/enrich_public_web.py `
+  --max-domains 0 `
+  --workers 18 `
+  --timeout 10 `
+  --output-dir screening_handover/founder_public_web
+```
+
+The output includes `public_web_report.json` with before/after field coverage, verified core additions, request status counts, and the explicit LinkedIn access policy. Domains are skipped when robots policy is unavailable or disallows access. OpenAlex enrichment is skipped unless `OPENALEX_API_KEY` is configured.
+
+Export this final dataset for Chroma and validate it locally:
+
+```powershell
+python Scripts/01_Screening/export_chroma.py `
+  --input-dir screening_handover/founder_public_web `
+  --output-dir screening_handover/chroma_public_web
+
+python Scripts/01_Screening/upload_chroma.py `
+  --input-dir screening_handover/chroma_public_web `
+  --dry-run
+```
+## Supabase PostgreSQL upload
+
+The Supabase export is normalized for querying while preserving every complete founder and evidence object in a `raw_record` JSONB column. The migration enables Row Level Security on every table and grants no browser-facing `anon` or `authenticated` access by default.
+
+1. Prepare and validate the local upload bundle:
+
+```powershell
+python Scripts/01_Screening/export_supabase.py --dry-run
+python Scripts/01_Screening/export_supabase.py
+python Scripts/01_Screening/upload_supabase.py --dry-run
+```
+
+2. In the Supabase SQL Editor, apply `supabase/migrations/202607180001_founder_screening.sql` once.
+
+3. Install the PostgreSQL uploader in the active Windows environment:
+
+```powershell
+python -m pip install -r Scripts/01_Screening/requirements-supabase.txt
+```
+
+4. Copy `.env.supabase.example` to `.env.supabase`, then paste the project's Session pooler connection string into `SUPABASE_DB_URL`. Keep `sslmode=require`; URL-encode special characters in the database password. The real environment file is ignored by Git.
+
+5. Upload with idempotent upserts inside one transaction:
+
+```powershell
+python Scripts/01_Screening/upload_supabase.py
+```
+
+Rerunning the uploader updates rows with the same deterministic primary keys. It does not delete rows that are absent from a later bundle. Do not put the database password, secret key, or legacy `service_role` key in frontend code or commit them to Git.

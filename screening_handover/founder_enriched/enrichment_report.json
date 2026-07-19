@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-07-19T00:44:11.201403Z",
+  "input_candidates": 2000,
+  "output_candidates": 2000,
+  "existing_evidence_records": 2005,
+  "new_evidence_records": 1379,
+  "output_evidence_records": 3384,
+  "qs_edition": 2027,
+  "qs_source_url": "https://www.qs.com/insights/qs-world-university-rankings-2027-results-table-excel",
+  "qs_ranked_institutions_loaded": 1504,
+  "coverage": {
+    "founders_with_documented_skills": 635,
+    "founders_with_education": 351,
+    "founders_with_qs_rank": 289,
+    "founders_with_verified_exit": 69,
+    "founders_with_reported_exit_count": 5
+  },
+  "null_policy": "Absence of public evidence remains null; no unobserved education or exit is encoded as false/zero."
+}

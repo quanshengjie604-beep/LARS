@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-07-19T00:46:31.094677Z",
+  "input_candidates": 2000,
+  "output_candidates": 2000,
+  "linkedin_anchors": 1983,
+  "unique_company_domains_available": 1020,
+  "company_domains_attempted": 1020,
+  "company_domain_status": {
+    "success": 765,
+    "robots_unavailable": 229,
+    "request_error": 18,
+    "robots_disallowed": 7,
+    "non_html": 1
+  },
+  "founders_with_new_facts": 44,
+  "coverage_before": {
+    "founders_with_education": 351,
+    "founders_with_bachelor": 146,
+    "founders_with_master": 184,
+    "founders_with_phd": 115,
+    "founders_with_qs_rank": 289,
+    "founders_with_documented_skills": 635,
+    "founders_with_verified_exit": 69,
+    "founders_with_reported_exit_count": 5
+  },
+  "coverage_after": {
+    "founders_with_education": 359,
+    "founders_with_bachelor": 149,
+    "founders_with_master": 188,
+    "founders_with_phd": 117,
+    "founders_with_qs_rank": 295,
+    "founders_with_documented_skills": 643,
+    "founders_with_verified_exit": 69,
+    "founders_with_reported_exit_count": 5
+  },
+  "verified_core_additions": {
+    "new_documented_degree_levels": 9,
+    "new_institution_names": 16,
+    "new_founders_with_qs_rank": 6,
+    "new_unique_skill_terms": 28,
+    "founders_with_core_field_improvements": 30
+  },
+  "new_evidence_records": 44,
+  "additions": {
+    "new_institution_records": 10,
+    "new_profile_urls": 9,
+    "new_skill_records": 28,
+    "wikidata_founders_matched": 12,
+    "company_pages_fetched": 1169,
+    "founder_name_matches": 307,
+    "new_degree_records": 25
+  },
+  "openalex_status": "skipped: OPENALEX_API_KEY is not configured",
+  "linkedin_policy": "LinkedIn pages were not requested; public vanity IDs were used only as identity anchors."
+}

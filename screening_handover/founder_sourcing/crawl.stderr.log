@@ -1,0 +1,22 @@
+2026-07-18 15:44:40,657 INFO founder_screening.pipeline: Collecting up to 2000 unique candidates from yc
+2026-07-18 15:44:44,829 INFO founder_screening.company_collectors: Found 3092 in-scope YC companies; verifying founder cards
+2026-07-18 15:45:10,491 INFO founder_screening.company_collectors: Verified 100 founder-company records
+2026-07-18 15:45:39,737 INFO founder_screening.company_collectors: Verified 200 founder-company records
+2026-07-18 15:46:08,494 INFO founder_screening.company_collectors: Verified 300 founder-company records
+2026-07-18 15:46:36,384 INFO founder_screening.company_collectors: Verified 400 founder-company records
+2026-07-18 15:47:02,016 INFO founder_screening.company_collectors: Verified 500 founder-company records
+2026-07-18 15:47:26,445 INFO founder_screening.company_collectors: Verified 600 founder-company records
+2026-07-18 15:47:54,936 INFO founder_screening.company_collectors: Verified 700 founder-company records
+2026-07-18 15:48:23,099 INFO founder_screening.company_collectors: Verified 800 founder-company records
+2026-07-18 15:48:50,162 INFO founder_screening.company_collectors: Verified 900 founder-company records
+2026-07-18 15:49:19,071 INFO founder_screening.company_collectors: Verified 1000 founder-company records
+2026-07-18 15:49:49,735 INFO founder_screening.company_collectors: Verified 1100 founder-company records
+2026-07-18 15:50:16,735 INFO founder_screening.company_collectors: Verified 1200 founder-company records
+2026-07-18 15:50:43,262 INFO founder_screening.company_collectors: Verified 1300 founder-company records
+2026-07-18 15:51:11,822 INFO founder_screening.company_collectors: Verified 1400 founder-company records
+2026-07-18 15:51:43,708 INFO founder_screening.company_collectors: Verified 1500 founder-company records
+2026-07-18 15:52:14,040 INFO founder_screening.company_collectors: Verified 1600 founder-company records
+2026-07-18 15:52:42,450 INFO founder_screening.company_collectors: Verified 1700 founder-company records
+2026-07-18 15:53:11,009 INFO founder_screening.company_collectors: Verified 1800 founder-company records
+2026-07-18 15:53:41,467 INFO founder_screening.company_collectors: Verified 1900 founder-company records
+2026-07-18 15:54:11,917 INFO founder_screening.company_collectors: Verified 2000 founder-company records

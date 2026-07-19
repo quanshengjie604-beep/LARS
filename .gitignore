@@ -5,3 +5,4 @@
 .idea/
 __pyc*
 *.pdf
+.env.supabase
