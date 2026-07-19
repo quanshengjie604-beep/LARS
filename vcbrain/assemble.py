@@ -286,6 +286,65 @@ def build_snapshot(
     return SnapshotBuild(final, axes, derived_evidence)
 
 
+# Directory statuses are point-in-time (observed as of the run) and undated. We map
+# the status VALUE token, never the prefix: "a16z listed investment stage:" and
+# "Pear current stage:" both mix real funding stages (Seed, Series A) with terminal
+# outcomes (IPO, M&A, Acquired), so keying on the prefix would mislabel exits. Values
+# are matched case-insensitively; enum targets follow ngboost_data_requirements.md.
+_EXIT_STATUS_VALUES: dict[str, str] = {
+    "public": "ipo",
+    "ipo": "ipo",
+    "spac": "ipo",          # a SPAC listing takes the company public
+    "acquired": "acquisition",
+    "acquisition": "acquisition",
+    "m&a": "acquisition",
+    "exits": "acquisition",  # a16z generic exit flag; a specific type wins when present
+    "exit": "acquisition",
+    "exited": "acquisition",
+}
+_FAILURE_STATUS_VALUES = frozenset(
+    {"inactive", "dead", "defunct", "closed", "ceased", "shutdown", "shut down"}
+)
+# Prefer the more definitive public-listing signal when several exit tokens coexist.
+_EXIT_TYPE_PRIORITY = {"ipo": 0, "acquisition": 1}
+
+
+@dataclass(slots=True)
+class StatusOutcome:
+    """Terminal exit/failure signal derived from point-in-time directory statuses."""
+
+    exit_type: str | None  # "ipo" | "acquisition" | None
+    failure: bool
+    matched_statuses: list[str]  # exact status strings that drove the classification
+
+
+def classify_status_outcome(statuses: Iterable[str]) -> StatusOutcome:
+    """Classify directory statuses into a terminal exit/failure signal.
+
+    Returns the classification only; the caller decides how to encode dates because a
+    directory status is undated (a current observation, not a dated event). An exit
+    takes priority over a failure when both appear (a specific liquidity event is a
+    stronger, more specific claim than the catch-all "inactive" flag).
+    """
+    exit_types: list[str] = []
+    exit_matches: list[str] = []
+    failure_matches: list[str] = []
+    for status in statuses:
+        value = status.rsplit(":", 1)[-1].strip().casefold()
+        mapped = _EXIT_STATUS_VALUES.get(value)
+        if mapped is not None:
+            exit_types.append(mapped)
+            exit_matches.append(status)
+        elif value in _FAILURE_STATUS_VALUES:
+            failure_matches.append(status)
+    if exit_types:
+        exit_type = min(exit_types, key=lambda item: _EXIT_TYPE_PRIORITY.get(item, 99))
+        return StatusOutcome(exit_type, False, sorted(set(exit_matches)))
+    if failure_matches:
+        return StatusOutcome(None, True, sorted(set(failure_matches)))
+    return StatusOutcome(None, False, [])
+
+
 def build_training_records(
     company: Company,
     *,
@@ -306,6 +365,10 @@ def build_training_records(
     outcomes: list[dict[str, Any]] = []
     derived: list[Evidence] = []
     prior_axes: dict[str, Any] | None = None
+    # A terminal exit/failure read off the company's current (undated) directory status.
+    # It is applied per snapshot below using as_of as the observation horizon, never
+    # backdated into the historical feature snapshots.
+    status_outcome = classify_status_outcome(company.statuses)
     # One post-round snapshot per distinct date. Same-day entries cannot be a
     # strictly later next round and are represented as one transition point.
     observation_dates = sorted({round_.date for round_ in company_rounds if parse_date(round_.date) <= as_of})
@@ -357,6 +420,36 @@ def build_training_records(
         outcome_source_ids = [censor_evidence.source_id]
         if next_round:
             outcome_source_ids.extend(next_round.source_ids)
+
+        # A directory status is undated, so a terminal outcome is only attributable to
+        # the strictly-post-cutoff window when that window is non-empty (censor_days > 0).
+        # The event date is recorded as the observation horizon (as_of) and flagged
+        # estimated/unverified; the exact-date and value fields stay null.
+        has_exit = status_outcome.exit_type is not None and censor_days > 0
+        has_failure = status_outcome.failure and censor_days > 0
+        terminal = has_exit or has_failure
+        if terminal:
+            terminal_kind = f"an exit ({status_outcome.exit_type})" if has_exit else "a failure"
+            status_evidence = make_evidence(
+                startup_id=company.startup_id,
+                channel="computed",
+                source_type="internal_monitoring_record",
+                document_name=f"Directory-status outcome determination through {as_of.isoformat()}",
+                excerpt=(
+                    f"Directory status(es) {', '.join(status_outcome.matched_statuses)} observed as of "
+                    f"{as_of.isoformat()} indicate {terminal_kind}. The status is point-in-time and "
+                    "undated; the event date is recorded as the observation horizon and the outcome is "
+                    "marked estimated and unverified, not a dated, independently verified transaction."
+                ),
+                source_uri=None,
+                document_date=as_of.isoformat(),
+                collected_at=collected_at,
+                location=build.record["snapshot_id"],
+                verification_status="estimated",
+                confidence="low",
+            )
+            derived.append(status_evidence)
+            outcome_source_ids.append(status_evidence.source_id)
         outcome = {
             "startup_id": company.startup_id,
             "opportunity_id": build.record["opportunity_id"],
@@ -370,11 +463,11 @@ def build_training_records(
             "next_event_date": next_round.date if next_round else None,
             "time_to_next_event_days": (next_date - cutoff).days if next_date else censor_days,
             "next_event_observed": next_round is not None,
-            "failure_observed": False,
-            "failure_date": None,
-            "failure_definition": None,
+            "failure_observed": has_failure,
+            "failure_date": as_of.isoformat() if has_failure else None,
+            "failure_definition": "other" if has_failure else None,
             "time_to_failure_days": censor_days,
-            "failure_event_observed": False,
+            "failure_event_observed": has_failure,
             "revenue_start_date": None,
             "revenue_start_usd": None,
             "revenue_end_date": None,
@@ -383,8 +476,8 @@ def build_training_records(
             "annual_growth_factor": None,
             "m4_included": False,
             "m4_exclusion_reason": "two_comparable_revenue_observations_not_found",
-            "exit_type": "no_exit_observed",
-            "exit_date": None,
+            "exit_type": status_outcome.exit_type if has_exit else "no_exit_observed",
+            "exit_date": as_of.isoformat() if has_exit else None,
             "exit_verified": False,
             "exit_valuation_usd": None,
             "exit_transaction_value_usd": None,
@@ -392,7 +485,7 @@ def build_training_records(
             "exit_value_disclosed": False,
             "exit_value_verified": False,
             "outcome_observation_end_date": as_of.isoformat(),
-            "company_still_observed": True,
+            "company_still_observed": not terminal,
             "source_ids": sorted(set(outcome_source_ids)),
         }
         outcomes.append(outcome)

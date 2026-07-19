@@ -33,7 +33,7 @@ python -m vcbrain mini --live --output-dir live_mini_output
 python -m vcbrain collect \
   --sources a16z,pear,yc,startx \
   --limit 0 \
-  --mode training \
+  --mode both \
   --output-dir screening_handover
 ```
 

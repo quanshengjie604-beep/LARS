@@ -1,6 +1,6 @@
 # Screening handover data dictionary
 
-Generated as of `2026-07-18` from configured sources: a16z, hackernews, pear, yc.
+Generated as of `2026-07-19` from configured sources: a16z, hackernews, pear, yc.
 
 ## Point-in-time contract
 
@@ -12,6 +12,10 @@ Generated as of `2026-07-18` from configured sources: a16z, hackernews, pear, yc
   investment dates. An a16z first-investment date is retained as such and is not represented as a
   complete company round.
 - Null means not observed. Private financials are never estimated into canonical NGBoost fields.
+- A current directory status of acquisition, IPO, or shutdown is recorded in `training_outcomes`
+  as a terminal exit/failure dated to the observation horizon (the run date), flagged estimated and
+  unverified. Such a status is never backdated into features nor presented as a dated, value-verified
+  transaction; exit valuation and value-verification fields stay null.
 
 ## Primary files
 
